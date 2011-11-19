@@ -31,7 +31,6 @@ def bayesian(X, t, sigma, mean_0, prec_0):
     """
 
     """
-    _, d = prec_0.shape
     prec_chol = la.cholesky(prec_0)
     # build up augmented designmatrix/targetvector
     Xt = np.append(X/sigma, prec_chol, axis=0)
@@ -43,11 +42,27 @@ def bayesian(X, t, sigma, mean_0, prec_0):
     return post_mean, post_prec, r
 
 
-def predictive(samples, obs_var, mean, sqrt_prec):
+def predictive(samples, sigma, mean, sqrt_prec):
     """
     """
     var = la.solve_triangular(sqrt_prec, samples.T, trans=1).T
-    return np.dot(samples, mean), obs_var**2 + np.sum(var**2, axis=1) 
+    return np.dot(samples, mean), sigma + np.sum(var**2, axis=1) 
+
+
+def robust(X, t, mean_0, prec_0, a, b):
+    """
+    """
+    prec_chol = la.cholesky(prec_0)
+    Xt = np.append(X, prec_chol, axis=0)
+    tt = np.append(t, np.dot(prec_chol, mean_0), axis=0)
+    n, d = Xt.shape
+    w = np.ones(n,1)
+    w_new= np.ones(n-d,1)
+    while True:
+        w[:-d] *= w_new/w[:-d]
+        mean = la.lstsq(np.sqrt(w/var)*Xt, np.sqrt(w/var)*tt)
+        _, r = la.qr(np.sqrt(w/var)*Xt)
+    return
 
 
 def test(nos, nob):
