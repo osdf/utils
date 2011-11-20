@@ -2,29 +2,38 @@ import numpy as np
 import scipy.linalg as la
 
 
-def draw_2d(mu, cov, n=100, radius = [1, np.sqrt(6)],
-        mu_color = 'r'):
+def 2d(mu, cov=None, prec=None, 
+        n=100, radius=[1, np.sqrt(6)]):
     """
     Assuming a bivariate normal
     distribution, draw contours,
     given 'radius' information.
 
+    Note:
     sqrt(6) covers roughly 95% of probability
-    mass (for 2d!), given the fact that the mahalanobis
+    mass (in 2d), given the fact that the mahalanobis
     distribution is chi-squared distributed.
     """
-    import pylab
     mu = mu.reshape(2,1) 
     t = np.linspace(0, 2*np.pi, n)
     circle = np.array([np.cos(t), np.sin(t)])
-    L = la.cholesky(cov)
-    ellipse = np.dot(L, circle)
-    # From here: only plotting stuff
-    ax = pylab.subplot(111)
+    if prec is None:
+        L = la.cholesky(cov)
+        ellipse = np.dot(L, circle)
+    else:
+        L = la.cholesky(prec)
+        ellipse = la.solve_triangular(L, circle)
+        # FIXME: not correct yet
+    plots = {}
     for r in radius:
-        ax.plot(r*ellipse[0,:] + mu[0], r*ellipse[1,:] + mu[1])
-    ax.plot(mu[0], mu[1], mu_color + 'o')
-    ax.set_aspect('equal')
+        plots[r] = (r*ellipse[0,:] + mu[0], r*ellipse[1,:] + mu[1])
+    return plots
+    # From here: only plotting stuff
+    #ax = pylab.subplot(111)
+    #for r in radius:
+    #    ax.plot(r*ellipse[0,:] + mu[0], r*ellipse[1,:] + mu[1])
+    #ax.plot(mu[0], mu[1], mu_color + 'o')
+    #ax.set_aspect('equal')
 
 
 def sample(n, mu, cov):
@@ -110,7 +119,7 @@ def log_eval(samples, mu, cov):
     # with square root from definition of gauss pdf.
     logdet = np.sum(np.log(np.diag(chol)))
     mhlb = la.solve_triangular(chol, (samples - mu.T).T, lower=True).T
-    # renote: no 0.5 before logdet, cancels with 2* from logdet
+    # re-note: no 0.5 before logdet, cancels with 2* from logdet
     return log_const - logdet - 0.5 * np.sum(mhlb**2, axis=1)
 
 
