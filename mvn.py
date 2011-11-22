@@ -2,7 +2,7 @@ import numpy as np
 import scipy.linalg as la
 
 
-def 2d(mu, cov=None, prec=None, 
+def contour_2d(mu, cov=None, prec=None, 
         n=100, radius=[1, np.sqrt(6)]):
     """
     Assuming a bivariate normal
