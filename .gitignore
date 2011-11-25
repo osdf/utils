@@ -1,3 +1,4 @@
 *.pyc
 *.png
 *.mat
+*.pkl.gz
