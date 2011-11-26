@@ -7,14 +7,7 @@ import numpy as np
 import scipy.linalg as la
 
 
-def logsumexp(array, axis):
-    """
-    Compute log of (sum of exps) 
-    along _axis_ in _array_ in a 
-    stable way.
-    """
-    axis_max = np.max(array, axis)[:, np.newaxis]
-    return axis_max + np.log(np.sum(np.exp(array-axis_max), axis))[:, np.newaxis]
+from misc import logsumexp
 
 
 def score(weights, inputs, targets, lmbd):
@@ -67,16 +60,16 @@ def grad(weights, inputs, targets, lmbd):
     """
     n, di = inputs.shape
     dt = np.max(targets) + 1
-    delta = np.zeros(weights.shape)
+    g = np.zeros(weights.shape)
     # The true predicted probabilities
     # are necessary here, thus np.exp(...)
     pred = np.exp(predict_log(weights, inputs, dt))
     error = pred
     # one signal per input sample
     pred[xrange(n), targets] -= 1
-    delta[:di*dt] = np.dot(inputs.T, error).flatten() + 2*lmbd*weights[:di*dt]
-    delta[di*dt:] = error.sum(axis=0)
-    return delta
+    g[:di*dt] = np.dot(inputs.T, error).flatten() + 2*lmbd*weights[:di*dt]
+    g[di*dt:] = error.sum(axis=0)
+    return g
 
 
 def sgd(weights, inputs, targets, epochs, lr, btsz, lmbd):
@@ -104,22 +97,6 @@ def sgd(weights, inputs, targets, epochs, lr, btsz, lmbd):
     return scores
 
 
-def one2K(classes):
-    """
-    Given a numeric encoding of
-    class membership in _classes_, 
-    produce a 1-of-K encoding.
-    """
-    c = classes.max() + 1
-    targets = np.zeros((len(classes), c))
-    targets[classes] = 1
-    return targets
-
-
-def K2one(targets):
-    return np.argmax(targets)
-
-
 def testing(nos, di, classes, epochs, lr, btsz, lmbd):
     """
     """
@@ -135,27 +112,6 @@ def testing(nos, di, classes, epochs, lr, btsz, lmbd):
     sc = sgd(weights, samples, targets, epochs, lr, btsz, lmbd)
     return sc
 
-
-def check_grad(f, fprime, x0, eps=10**-4, **args):
-    """
-    """
-    # computed gradient at x0
-    grad = fprime(x0, **args)
-    # space for the numeric gradient
-    ngrad = np.zeros(grad.shape)
-    # for every component of x:
-    for i in xrange(x0.shape[0]):
-        # inplace change
-        x0[i] += eps
-        f1 = f(x0, **args)
-        # inplace change
-        x0[i] -= 2*eps
-        f2 = f(x0, **args)
-        # second order approximation
-        ngrad[i] = (f1-f2)/(2*eps)
-        # undo previous _inplace_ change 
-        x0[i] += eps
-    return np.sqrt(np.sum((grad-ngrad)**2))
 
 
 def testing_mnist(epochs=80, lr=0.13, btsz=600, lmbd=0.0001):
