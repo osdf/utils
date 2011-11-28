@@ -16,10 +16,14 @@ def score_xe(z, targets, predict=False, error=False):
     if predict:
         return np.argmax(z, axis=1)
     #
-    xe = z - logsumexp(z, axis=1)
+    _xe = z - logsumexp(z, axis=1)
+    n, _ = _xe.shape
+    xe = -np.sum(_xe[np.arange(n), targets])
     if error:
-        # score + error
-        return xe, z - targets
+        err = np.exp(_xe)
+        err[np.arange(n), targets] -= 1
+        #score + error
+        return xe, err
     else:
         return xe
 
@@ -96,7 +100,7 @@ def grad(weights, structure, inputs, targets):
     # backprop through last layer, activation fct. is id.
     l = layers[-1]
     idx = l[1]
-    g[-idx] = delta.sum(axis=0)
+    g[-idx:] = delta.sum(axis=0)
     idy = idx + l[0]*l[1]
     g[-idy:-idx] = np.dot(hiddens[-1].T, delta).flatten()
     # new delta for one layer below
@@ -105,14 +109,18 @@ def grad(weights, structure, inputs, targets):
     for l, A, h in reversed(zip(layers[:-1], activs, hiddens[:-1])):
         # remember: tmp are values _after_ applying 
         # activation A to matrix-vector product
+        # Compute dE/dA
         dE_dA = delta * (Dtable[A](tmp))
         idx = idy + l[1]
+        # gradient for biases
         g[-idx:-idy] = dE_dA.sum(axis=0)
         idy = idx + l[0] * l[1]
+        # gradient for weights in layer l
         g[-idy:-idx] = np.dot(h.T, dE_dA).flatten()
         # backprop delta
         delta = np.dot(delta, weights[-idy:-idx].reshape(l[0], l[1]).T)
         tmp = h
+    # clean up structure
     del structure["hiddens"]
     return g
 
@@ -137,22 +145,40 @@ def demo(hiddens, epochs, lr, btsz, lmbd):
     strucutre["score"] = score_sm
 
 
-def check_the_gradient():
+def check_the_gradient(nos=5000, ind=30, outd=3, classes=10):
     """
+    Check gradient computation for Neural Networks.
     """
     #
     from opt import check_grad
+    # number of input samples (nos)
+    # with dimension d each
+    ins = np.random.randn(nos, ind)
     #
-    ins = np.random.randn(5000, 30)
-    outs = np.random.randn(5000, 1)
+    # Uncomment for
+    # Regression    
+    # Network with one hidden layer
+    #structure = dict()
+    #structure["layers"] = [(ind, 15), (15, outd)]
+    #structure["activs"] = [sigmoid]
+    #structure["score"] = score_ssd
+    #outs = np.random.randn(nos, outd)
+    #weights = np.random.randn(ind*15 + 15 + 15*outd + outd)
+    # Uncomment for
+    # Classification
+    classes = 10
     structure = dict()
-    structure["layers"] = [(30, 15), (15, 1)]
+    structure["layers"] = [(ind, 15), (15, classes)]
     structure["activs"] = [sigmoid]
-    structure["score"] = score_ssd
-    weights = np.random.randn(30*15 + 15 + 15 + 1)
+    structure["score"] = score_xe
+    outs = np.random.random_integers(classes, size=(nos)) - 1
+    weights = np.random.randn(ind*15 + 15 + 15*classes + classes)
+    #
+    # Same for both Regression/Classification
     cg = dict()
     cg["inputs"] = ins
     cg["targets"] = outs
     cg["structure"] = structure
+    #
     delta = check_grad(fward, grad, weights, cg)
     print delta

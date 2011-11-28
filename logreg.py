@@ -65,36 +65,12 @@ def grad(weights, inputs, targets, lmbd):
     pred = np.exp(predict_log(weights, inputs, dt))
     error = pred
     # one signal per input sample
-    pred[xrange(n), targets] -= 1
+    error[np.arange(n), targets] -= 1
     g[:di*dt] = np.dot(inputs.T, error).flatten() + 2*lmbd*weights[:di*dt]
     g[di*dt:] = error.sum(axis=0)
     return g
 
 
-def sgd(weights, inputs, targets, epochs, lr, btsz, lmbd):
-    """
-    Stochastic gradient descent.
-    """
-    n, _ = inputs.shape
-    div = n/btsz
-    mod = n%btsz
-    lr /= btsz
-    scores = []
-    for e in xrange(epochs):
-        sc = 0
-        for b in xrange(div):
-            sc += score(weights, inputs[b*btsz:(b+1)*btsz],
-                    targets[b*btsz:(b+1)*btsz], lmbd)
-            delta = grad(weights, inputs[b*btsz:(b+1)*btsz], 
-                    targets[b*btsz:(b+1)*btsz], lmbd)
-            weights -= lr*delta
-        if mod>0:
-            sc += score(weights, inputs[-mod:],targets[-mod:], lmbd)
-            delta = grad(weights, inputs[-mod:], targets[-mod:], lmbd)
-            weights -= lr*btsz*delta/mod
-        scores.append(sc)
-    lr *= btsz
-    return scores
 
 
 def testing(nos, di, classes, epochs, lr, btsz, lmbd):
