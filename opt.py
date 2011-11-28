@@ -7,7 +7,7 @@ import numpy as np
 import scipy.linalg as la
 
 
-def check_grad(f, fprime, x0, eps=10**-4, **args):
+def check_grad(f, fprime, x0, args, eps=10**-4):
     """
     """
     # computed gradient at x0

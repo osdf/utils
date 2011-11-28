@@ -26,7 +26,6 @@ def score(weights, inputs, targets, lmbd):
     # advanced indexing: only log predict at 
     # target class is counted (assumes: targets
     # as only one true target per input)
-    print  -np.sum(pred[xrange(n), targets]) + reg
     return -np.sum(pred[xrange(n), targets]) + reg
 
 
@@ -74,6 +73,7 @@ def grad(weights, inputs, targets, lmbd):
 
 def sgd(weights, inputs, targets, epochs, lr, btsz, lmbd):
     """
+    Stochastic gradient descent.
     """
     n, _ = inputs.shape
     div = n/btsz

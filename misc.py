@@ -7,6 +7,34 @@ import numpy as np
 import scipy.linalg as la
 
 
+def sigmoid(x):
+    return (1 + np.tanh(x/2.))/2.
+
+
+def Dsigmoid(y):
+    """
+    Given y = sigmoid(x),
+    what is dy/dx in terms of
+    y.
+    """
+    return y*(1-y)
+
+
+def Dtanh(y):
+    """
+    Given y = tanh(x),
+    what is dy/dx in terms of
+    y.
+    """
+    return 1 - y**2
+
+
+Dtable = {
+        sigmoid: Dsigmoid,
+        np.tanh: Dtanh
+        }
+
+
 def logsumexp(array, axis):
     """
     Compute log of (sum of exps) 
@@ -15,10 +43,6 @@ def logsumexp(array, axis):
     """
     axis_max = np.max(array, axis)[:, np.newaxis]
     return axis_max + np.log(np.sum(np.exp(array-axis_max), axis))[:, np.newaxis]
-
-
-def sigmoid(x):
-    return (1 + np.tanh(activ/2.))/2.
 
 
 def one2K(classes):
