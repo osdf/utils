@@ -90,7 +90,7 @@ def testing(nos, di, classes, epochs, lr, btsz, lmbd):
 
 
 
-def testing_mnist(epochs=80, lr=0.13, btsz=600, lmbd=0.0001):
+def demo_mnist(epochs=80, lr=0.13, btsz=600, lmbd=0.0001):
     """
     """
     import scipy.optimize as opt
@@ -107,23 +107,3 @@ def testing_mnist(epochs=80, lr=0.13, btsz=600, lmbd=0.0001):
     #sc = opt.fmin_l_bfgs_b(score, weights, grad, args=(inputs, targets, 0.0001), disp=2)
     #sc = opt.fmin_cg(score, weights, grad, args=(inputs, targets, 0.0001), retall=True)
     return sc
-
- 
-def load_mnist():
-    """
-    Get standard MNIST: training, validation, testing.
-    File 'mnist.pkl.gz' must be in path.
-    Download it from ...
-    """
-    import gzip, cPickle
-    print "Reading mnist.pkl.gz ..."
-    f = gzip.open('mnist.pkl.gz','rb')
-    trainset, valset, testset = cPickle.load(f)
-    return trainset, valset, testset
-
-
-def loss(weights, inputs, targets):
-    """
-    """
-
-

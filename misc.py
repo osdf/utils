@@ -59,3 +59,16 @@ def one2K(classes):
 
 def K2one(onehotcoding):
     return np.argmax(onehotcoding, axis=1)
+
+
+def load_mnist():
+    """
+    Get standard MNIST: training, validation, testing.
+    File 'mnist.pkl.gz' must be in path.
+    Download it from ...
+    """
+    import gzip, cPickle
+    print "Reading mnist.pkl.gz ..."
+    f = gzip.open('mnist.pkl.gz','rb')
+    trainset, valset, testset = cPickle.load(f)
+    return trainset, valset, testset

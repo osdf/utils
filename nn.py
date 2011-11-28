@@ -7,7 +7,7 @@ import numpy as np
 import scipy.linalg as la
 
 
-from misc import logsumexp, Dtable, sigmoid
+from misc import logsumexp, Dtable 
 
 
 def score_xe(z, targets, predict=False, error=False):
@@ -25,6 +25,7 @@ def score_xe(z, targets, predict=False, error=False):
         #score + error
         return xe, err
     else:
+        print xe
         return xe
 
 
@@ -50,12 +51,9 @@ def score_mia():
     pass
 
 
-def fward(weights, structure, inputs, targets, predict=False, error=False):
+def fward(weights, inputs, targets, structure,
+        predict=False, error=False, **params):
     """
-    structure: dictrionary with
-    layers - list of pairs
-    activations functions - list of act. func., apart from last layer - id
-    score - list? 
     """
     layers = structure["layers"]
     activs = structure["activs"]
@@ -66,7 +64,7 @@ def fward(weights, structure, inputs, targets, predict=False, error=False):
     for l, A in zip(layers[:-1], activs):
         if error:
             # note: store a pointer to z, i.e.
-            # values _after_ applying activation a!
+            # values _after_ applying activation A!
             hiddens.append(z)
         idy = idx + l[0]*l[1]
         z = A(np.dot(z, weights[idx:idy].reshape(l[0], l[1])) \
@@ -86,14 +84,14 @@ def fward(weights, structure, inputs, targets, predict=False, error=False):
     return score(z, targets, predict=predict, error=error)
 
 
-def grad(weights, structure, inputs, targets):
+def grad(weights, inputs, targets, structure, **params):
     """
     """
     g = np.zeros(weights.shape)
     # forward pass through model,
     # need 'error' signal at the end.
-    score, delta = fward(weights, structure, inputs, targets, 
-            predict=False, error=True)
+    score, delta = fward(weights, inputs=inputs, targets=targets,
+            structure=structure, predict=False, error=True, **params)
     layers = structure["layers"]
     activs = structure["activs"]
     hiddens = structure["hiddens"]
@@ -109,14 +107,14 @@ def grad(weights, structure, inputs, targets):
     for l, A, h in reversed(zip(layers[:-1], activs, hiddens[:-1])):
         # remember: tmp are values _after_ applying 
         # activation A to matrix-vector product
-        # Compute dE/dA
-        dE_dA = delta * (Dtable[A](tmp))
+        # Compute dE/da (small a -> before A is applied)
+        dE_da = delta * (Dtable[A](tmp))
         idx = idy + l[1]
         # gradient for biases
-        g[-idx:-idy] = dE_dA.sum(axis=0)
+        g[-idx:-idy] = dE_da.sum(axis=0)
         idy = idx + l[0] * l[1]
         # gradient for weights in layer l
-        g[-idy:-idx] = np.dot(h.T, dE_dA).flatten()
+        g[-idy:-idx] = np.dot(h.T, dE_da).flatten()
         # backprop delta
         delta = np.dot(delta, weights[-idy:-idx].reshape(l[0], l[1]).T)
         tmp = h
@@ -125,16 +123,35 @@ def grad(weights, structure, inputs, targets):
     return g
 
 
-def predict(weights, structure, inputs):
+def predict(weights, inputs, structure, **params):
     """
     """
     return fward(weights, structure, inputs, 
             targets=None, predict=True)
 
 
-def demo(hiddens, epochs, lr, btsz, lmbd):
+def init_weights(structure, var=0.01):
     """
     """
+    size=0
+    layers = structure["layers"]
+    # determine number of total weights
+    for l in layers:
+        size += l[0]*l[1] + l[1]
+    weights = np.zeros(size)
+    # init weights. biases are 0. 
+    idx = 0
+    for l in layers:
+        weights[idx:idx+l[0]*l[1]] = var * np.random.randn(l[0]*l[1])
+        idx += l[0] * l[1] + l[1]
+    return weights
+
+
+def demo_mnist(hiddens, epochs, lr, btsz, lmbd, opti):
+    """
+    """
+    from misc import sigmoid, load_mnist
+    #
     trainset, valset, testset = load_mnist()
     inputs, targets = trainset
     di = inputs.shape[1]
@@ -142,8 +159,22 @@ def demo(hiddens, epochs, lr, btsz, lmbd):
     structure = {}
     structure["layers"] = [(di, hiddens), (hiddens, dt)]
     structure["activs"] = [sigmoid]
-    strucutre["score"] = score_sm
-
+    structure["score"] = score_xe
+    weights = init_weights(structure) 
+    print "Training starts..."
+    params = dict()
+    params["func"] = fward
+    params["x0"] = weights
+    params["fprime"] = grad
+    params["inputs"] = inputs
+    params["targets"] = targets
+    params["epochs"] = epochs
+    params["lr"] = lr 
+    params["btsz"] = btsz
+    params["verbose"] = True
+    params["args"] = (inputs, targets, structure)
+    params["sto_args"] = {"structure":structure}
+    opti(**params)
 
 def check_the_gradient(nos=5000, ind=30, outd=3, classes=10):
     """
@@ -151,6 +182,7 @@ def check_the_gradient(nos=5000, ind=30, outd=3, classes=10):
     """
     #
     from opt import check_grad
+    from misc import sigmoid
     # number of input samples (nos)
     # with dimension d each
     ins = np.random.randn(nos, ind)
@@ -172,7 +204,7 @@ def check_the_gradient(nos=5000, ind=30, outd=3, classes=10):
     structure["activs"] = [sigmoid]
     structure["score"] = score_xe
     outs = np.random.random_integers(classes, size=(nos)) - 1
-    weights = np.random.randn(ind*15 + 15 + 15*classes + classes)
+    weights = init_weights(structure) 
     #
     # Same for both Regression/Classification
     cg = dict()
