@@ -52,5 +52,4 @@ def score_mia():
 def loss_zero_one(z, targets):
     """
     """
-    return np.sum(z==targets)
-    
+    return np.sum(z!=targets)

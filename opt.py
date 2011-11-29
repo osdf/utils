@@ -36,14 +36,13 @@ def check_grad(f, fprime, x0, args, eps=10**-4, verbose=False):
 
 
 def msgd(func, x0, fprime, args, batch_args,
-        epochs, lr, btsz, verbose=False, 
+        epochs, nos, lr, btsz, verbose=False, 
         **params):
     """
     Minibatch stochastic gradient descent.
     """
-    n, _ = inputs.shape
-    div = n/btsz
-    mod = n%btsz
+    div = nos/btsz
+    mod = nos%btsz
     lr /= btsz
     scores = []
     for e in xrange(epochs):
@@ -81,7 +80,7 @@ def lbfgsb(func, x0, fprime=None, args=(), approx_grad=0,
 def tnc(func, x0, fprime=None, args=(), approx_grad=0, bounds=None,
         epsilon=1e-08, scale=None, offset=None, messages=15, 
         maxCGit=-1, maxfun=None, eta=-1, stepmx=0, accuracy=0, fmin=0, 
-        ftol=-1, xtol=-1, pgtol=-1, rescale=-1, disp=None, **params):
+        ftol=-1, xtol=-1, pgtol=-1, rescale=-1, disp=5, **params):
     """
     """
     return fmin_tnc(func=func, x0=x0, fprime=fprime, args=args, 

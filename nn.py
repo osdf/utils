@@ -106,11 +106,12 @@ def init_weights(structure, var=0.01):
     return weights
 
 
-def demo_mnist(hiddens, epochs, lr, btsz, lmbd, opti):
+def demo_mnist(hiddens, epochs, lr, btsz, lmbd, opt):
     """
     """
     from misc import sigmoid, load_mnist
     from losses import score_xe, loss_zero_one
+    from opt import msgd
     #
     trainset, valset, testset = load_mnist()
     inputs, targets = trainset
@@ -119,7 +120,7 @@ def demo_mnist(hiddens, epochs, lr, btsz, lmbd, opti):
     dt = np.max(targets) + 1
     structure = {}
     structure["layers"] = [(di, hiddens), (hiddens, dt)]
-    structure["activs"] = [sigmoid]
+    structure["activs"] = [np.tanh]
     structure["score"] = score_xe
     weights = init_weights(structure) 
     print "Training starts..."
@@ -133,9 +134,14 @@ def demo_mnist(hiddens, epochs, lr, btsz, lmbd, opti):
     params["lr"] = lr 
     params["btsz"] = btsz
     params["verbose"] = True
-    params["args"] = (structure, inputs, targets)
-    params["args"] = {"structure":structure}
-    opti(**params)
+    if opt is msgd:
+        params["nos"] = inputs.shape[0]
+        params["args"] = {"structure": structure}
+        params["batch_args"] = {"inputs": inputs, "targets": targets}
+    else:
+        params["args"] = (structure, inputs, targets)
+        params["maxfun"] = epochs 
+    weights = opt(**params)[0]
     print loss_zero_one(predict(weights, structure, test_in), test_tar)
     return
 

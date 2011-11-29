@@ -17,7 +17,7 @@ def score(weights, inputs, targets=None,
     """
     _, di = inputs.shape
     dt = weights.shape[0]/(di + 1)
-    z = np.dot(inputs, weights[:di*dt].reshape(di, dt))
+    z = np.dot(inputs, weights[:di*dt].reshape(di, dt)) + weights[di*dt:]
     return score_xe(z, targets=targets, predict=predict, error=error)
 
 
@@ -43,7 +43,7 @@ def grad(weights, inputs, targets, **params):
     return g
 
 
-def check_the_grad(nos=1000, ind=30, classes=5, eps=10**-8):
+def check_the_grad(nos=1000, ind=30, classes=5, eps=10**-6):
     """
     """
     from opt import check_grad
@@ -60,20 +60,40 @@ def check_the_grad(nos=1000, ind=30, classes=5, eps=10**-8):
     assert delta < 10**-4, "[logreg.py] check_the_gradient FAILED. Delta is %f" % delta
     return True
 
-def demo_mnist(epochs=80, lr=0.13, btsz=600, lmbd=0.0001):
+def demo_mnist(epochs, lr, btsz, opt):
     """
     """
-    import scipy.optimize as opt
+    from misc import sigmoid, load_mnist
+    from losses import score_xe, loss_zero_one
+    from opt import msgd
+    #
     trainset, valset, testset = load_mnist()
     inputs, targets = trainset
+    test_in, test_tar = testset
+    #
     di = inputs.shape[1]
     dt = np.max(targets) + 1
     # setup weights
     weights = 0.01 * np.random.randn(di*dt+dt)
     weights[-dt:] = 0.
     print "Training starts..."
-    #sc = sgd(weights, inputs, targets, epochs, lr, btsz, lmbd)
-    #sc = opt.fmin_tnc(score, weights, grad, args=(inputs, targets, 0.0001), maxCGit=0)
-    #sc = opt.fmin_l_bfgs_b(score, weights, grad, args=(inputs, targets, 0.0001), disp=2)
-    #sc = opt.fmin_cg(score, weights, grad, args=(inputs, targets, 0.0001), retall=True)
-    return sc
+    params = dict()
+    params["func"] = score
+    params["x0"] = weights
+    params["fprime"] = grad
+    params["inputs"] = inputs
+    params["targets"] = targets
+    params["epochs"] = epochs
+    params["lr"] = lr 
+    params["btsz"] = btsz
+    params["verbose"] = True
+    if opt is msgd:
+        params["nos"] = inputs.shape[0]
+        params["args"] = {}
+        params["batch_args"] = {"inputs": inputs, "targets": targets}
+    else:
+        params["args"] = (inputs, targets)
+        params["maxfun"] = epochs 
+    weights = opt(**params)[0]
+    print loss_zero_one(predict(weights, test_in), test_tar)
+    return
