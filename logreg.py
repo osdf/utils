@@ -8,50 +8,26 @@ import scipy.linalg as la
 
 
 from misc import logsumexp
+from losses import score_xe
 
 
-def score(weights, inputs, targets, lmbd):
+def score(weights, inputs, targets=None, 
+        predict=False, error=False, **params):
     """
-    Compute score for _weights_, given
-    _inputs_ and _targets_, the provided 
-    supervision, need to be in 1-of-K coding.
-    """
-    n, di = inputs.shape
-    dt = np.max(targets) + 1
-    # log predict is ok here -> loglikelihood
-    pred = predict_log(weights, inputs, dt)
-    # weight decay term
-    reg = lmbd*np.sum(weights[:di*dt]**2)
-    # negative loglikelihood + regularizer.
-    # advanced indexing: only log predict at 
-    # target class is counted (assumes: targets
-    # as only one true target per input)
-    return -np.sum(pred[xrange(n), targets]) + reg
-
-
-def predict_log(weights, inputs, dt):
-    """
-    Predict target distribution 
-    for _inputs_, given _weights_.
     """
     _, di = inputs.shape
-    y = np.dot(inputs, weights[:di*dt].reshape(di, dt)) + weights[di*dt:]
-    return y - logsumexp(y, axis=1)
+    dt = weights.shape[0]/(di + 1)
+    z = np.dot(inputs, weights[:di*dt].reshape(di, dt))
+    return score_xe(z, targets=targets, predict=predict, error=error)
 
 
-def classify(weights, inputs, dt):
+def predict(weights, inputs, **params):
     """
-    Classify _inputs_ given and model _weights_.
-
-    Returns numbered classes
     """
-    # np.exp() is not necessary,
-    # because it is strictly increasing.
-    y = predict_log(weights, inputs, dt)
-    return np.argmax(y, axis=1) 
+    return score(weights, inputs, targets=None, predict=True)
 
 
-def grad(weights, inputs, targets, lmbd):
+def grad(weights, inputs, targets, **params):
     """
     Compute the (batch) gradient at _weights_
     for training set _inputs_/_targets_.
@@ -60,35 +36,29 @@ def grad(weights, inputs, targets, lmbd):
     n, di = inputs.shape
     dt = np.max(targets) + 1
     g = np.zeros(weights.shape)
-    # The true predicted probabilities
-    # are necessary here, thus np.exp(...)
-    pred = np.exp(predict_log(weights, inputs, dt))
-    error = pred
+    xe, error = score(weights, inputs, targets, predict=False, error=True)
     # one signal per input sample
-    error[np.arange(n), targets] -= 1
-    g[:di*dt] = np.dot(inputs.T, error).flatten() + 2*lmbd*weights[:di*dt]
+    g[:di*dt] = np.dot(inputs.T, error).flatten()
     g[di*dt:] = error.sum(axis=0)
     return g
 
 
-
-
-def testing(nos, di, classes, epochs, lr, btsz, lmbd):
+def check_the_grad(nos=1000, ind=30, classes=5, eps=10**-8):
     """
     """
-    samples = 2*np.random.randn(nos, di)
-    targets = np.random.random_integers(classes, size=(nos))
-    targets += np.random.random_integers(classes/2, size=(nos))
-    targets -= 1
-    c = np.max(targets)+1
-    #targets = one2K(c)
-    # init weights, bias have zeros
-    weights = 0.01 * np.random.randn(di*c + c)
-    weights[-classes:] = 0.
-    sc = sgd(weights, samples, targets, epochs, lr, btsz, lmbd)
-    return sc
-
-
+    from opt import check_grad
+    #
+    weights = 0.1*np.random.randn(ind*classes + classes)
+    ins = np.random.randn(nos, ind)
+    outs = np.random.random_integers(classes, size=(nos)) - 1
+    #
+    cg = dict()
+    cg["inputs"] = ins
+    cg["targets"] = outs
+    #
+    delta = check_grad(score, grad, weights, cg, eps)
+    assert delta < 10**-4, "[logreg.py] check_the_gradient FAILED. Delta is %f" % delta
+    return True
 
 def demo_mnist(epochs=80, lr=0.13, btsz=600, lmbd=0.0001):
     """

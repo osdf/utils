@@ -10,48 +10,7 @@ import scipy.linalg as la
 from misc import logsumexp, Dtable 
 
 
-def score_xe(z, targets, predict=False, error=False):
-    """
-    """
-    if predict:
-        return np.argmax(z, axis=1)
-    #
-    _xe = z - logsumexp(z, axis=1)
-    n, _ = _xe.shape
-    xe = -np.sum(_xe[np.arange(n), targets])
-    if error:
-        err = np.exp(_xe)
-        err[np.arange(n), targets] -= 1
-        #score + error
-        return xe, err
-    else:
-        print xe
-        return xe
-
-
-def score_ssd(z, targets, predict=False, error=False):
-    """
-    """
-    if predict:
-        return z
-    #
-    err = z - targets
-    if error:
-        # score + error
-        return 0.5*np.sum(err**2), err
-    else:
-        # only return score
-        return 0.5*np.sum(err**2)
-
-
-def score_mia():
-    """
-    Multiple independent attributes.
-    """
-    pass
-
-
-def fward(weights, inputs, targets, structure,
+def score(weights, structure, inputs, targets,
         predict=False, error=False, **params):
     """
     """
@@ -80,17 +39,17 @@ def fward(weights, inputs, targets, structure,
     # everyting will be handeled by score
     z = np.dot(z, weights[idx:idy].reshape(l[0], l[1])) \
                 + weights[idy:idy+l[1]]
-    score = structure["score"]
-    return score(z, targets, predict=predict, error=error)
+    sc = structure["score"]
+    return sc(z, targets, predict=predict, error=error)
 
 
-def grad(weights, inputs, targets, structure, **params):
+def grad(weights, structure, inputs, targets, **params):
     """
     """
     g = np.zeros(weights.shape)
     # forward pass through model,
     # need 'error' signal at the end.
-    score, delta = fward(weights, inputs=inputs, targets=targets,
+    sc, delta = score(weights, inputs=inputs, targets=targets,
             structure=structure, predict=False, error=True, **params)
     layers = structure["layers"]
     activs = structure["activs"]
@@ -123,10 +82,10 @@ def grad(weights, inputs, targets, structure, **params):
     return g
 
 
-def predict(weights, inputs, structure, **params):
+def predict(weights, structure, inputs, **params):
     """
     """
-    return fward(weights, structure, inputs, 
+    return score(weights, structure, inputs, 
             targets=None, predict=True)
 
 
@@ -151,9 +110,11 @@ def demo_mnist(hiddens, epochs, lr, btsz, lmbd, opti):
     """
     """
     from misc import sigmoid, load_mnist
+    from losses import score_xe, loss_zero_one
     #
     trainset, valset, testset = load_mnist()
     inputs, targets = trainset
+    test_in, test_tar = testset
     di = inputs.shape[1]
     dt = np.max(targets) + 1
     structure = {}
@@ -163,7 +124,7 @@ def demo_mnist(hiddens, epochs, lr, btsz, lmbd, opti):
     weights = init_weights(structure) 
     print "Training starts..."
     params = dict()
-    params["func"] = fward
+    params["func"] = score
     params["x0"] = weights
     params["fprime"] = grad
     params["inputs"] = inputs
@@ -172,45 +133,47 @@ def demo_mnist(hiddens, epochs, lr, btsz, lmbd, opti):
     params["lr"] = lr 
     params["btsz"] = btsz
     params["verbose"] = True
-    params["args"] = (inputs, targets, structure)
-    params["sto_args"] = {"structure":structure}
+    params["args"] = (structure, inputs, targets)
+    params["args"] = {"structure":structure}
     opti(**params)
+    print loss_zero_one(predict(weights, structure, test_in), test_tar)
+    return
 
-def check_the_gradient(nos=5000, ind=30, outd=3, classes=10):
+
+def check_the_grad(regression=True, nos=5000, ind=30, 
+        outd=3, classes=10, eps=10**-4, verbose=False):
     """
     Check gradient computation for Neural Networks.
     """
     #
     from opt import check_grad
     from misc import sigmoid
+    from losses import score_xe, score_ssd
     # number of input samples (nos)
     # with dimension d each
     ins = np.random.randn(nos, ind)
     #
-    # Uncomment for
+    structure = dict()
+    if regression:
     # Regression    
     # Network with one hidden layer
-    #structure = dict()
-    #structure["layers"] = [(ind, 15), (15, outd)]
-    #structure["activs"] = [sigmoid]
-    #structure["score"] = score_ssd
-    #outs = np.random.randn(nos, outd)
-    #weights = np.random.randn(ind*15 + 15 + 15*outd + outd)
-    # Uncomment for
-    # Classification
-    classes = 10
-    structure = dict()
-    structure["layers"] = [(ind, 15), (15, classes)]
-    structure["activs"] = [sigmoid]
-    structure["score"] = score_xe
-    outs = np.random.random_integers(classes, size=(nos)) - 1
+        structure["layers"] = [(ind, 15), (15, outd)]
+        structure["activs"] = [np.tanh]
+        structure["score"] = score_ssd
+        outs = np.random.randn(nos, outd)
+    else:
+        # Classification
+        classes = 10
+        structure["layers"] = [(ind, 15), (15, classes)]
+        structure["activs"] = [sigmoid]
+        structure["score"] = score_xe
+        outs = np.random.random_integers(classes, size=(nos)) - 1
     weights = init_weights(structure) 
-    #
-    # Same for both Regression/Classification
     cg = dict()
     cg["inputs"] = ins
     cg["targets"] = outs
     cg["structure"] = structure
     #
-    delta = check_grad(fward, grad, weights, cg)
-    print delta
+    delta = check_grad(score, grad, weights, cg, eps=eps, verbose=verbose)
+    assert delta < 10**-2, "[nn.py] check_the_grad FAILED. Delta is %f" % delta
+    return True

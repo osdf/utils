@@ -8,7 +8,7 @@ import scipy.linalg as la
 from scipy.optimize import fmin_l_bfgs_b, fmin_tnc
 
 
-def check_grad(f, fprime, x0, args, eps=10**-4):
+def check_grad(f, fprime, x0, args, eps=10**-4, verbose=False):
     """
     """
     # computed gradient at x0
@@ -16,6 +16,8 @@ def check_grad(f, fprime, x0, args, eps=10**-4):
     # space for the numeric gradient
     ngrad = np.zeros(grad.shape)
     # for every component of x:
+    if verbose: 
+        print "Number of total function calls: 2*%d"% x0.shape[0]
     for i in xrange(x0.shape[0]):
         # inplace change
         x0[i] += eps
@@ -27,11 +29,14 @@ def check_grad(f, fprime, x0, args, eps=10**-4):
         ngrad[i] = (f1-f2)/(2*eps)
         # undo previous _inplace_ change 
         x0[i] += eps
-    return np.sqrt(np.sum((grad-ngrad)**2))
+    delta_2 = np.sum((grad-ngrad)**2)
+    if verbose:
+        print "Squared distance: %f"% delta_2
+    return np.sqrt(delta_2)
 
 
-def msgd(func, x0, fprime, inputs, targets,
-        sto_args, epochs, lr, btsz, verbose=False, 
+def msgd(func, x0, fprime, args, batch_args,
+        epochs, lr, btsz, verbose=False, 
         **params):
     """
     Minibatch stochastic gradient descent.
@@ -44,14 +49,16 @@ def msgd(func, x0, fprime, inputs, targets,
     for e in xrange(epochs):
         sc = 0
         for b in xrange(div):
-            sc += func(x0, inputs[b*btsz:(b+1)*btsz],
-                    targets[b*btsz:(b+1)*btsz], **sto_args)
-            delta = fprime(x0, inputs[b*btsz:(b+1)*btsz], 
-                    targets[b*btsz:(b+1)*btsz], **sto_args)
+            for item in batch_args:
+                args[item] = batch_args[item][b*btsz:(b+1)*btsz]
+            sc += func(x0, **args)
+            delta = fprime(x0, **args)
             x0 -= lr*delta
         if mod>0:
-            sc += score(x0, inputs[-mod:],targets[-mod:], **sto_args)
-            delta = grad(x0, inputs[-mod:], targets[-mod:], **sto_args)
+            for item in batch_args:
+                args[item] = batch_args[item][b*btsz:(b+1)*btsz]
+            sc += func(x0, **args)
+            delta = fprime(x0, **args)
             x0 -= lr*btsz*x0/mod
         scores.append(sc)
         if verbose:
