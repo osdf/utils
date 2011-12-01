@@ -41,28 +41,123 @@ def msgd(func, x0, fprime, args, batch_args,
     """
     Minibatch stochastic gradient descent.
     """
-    div = nos/btsz
-    mod = nos%btsz
     lr /= btsz
+    #
+    start = 0
+    end = 0
+    score = 0
     scores = []
-    for e in xrange(epochs):
-        sc = 0
-        for b in xrange(div):
-            for item in batch_args:
-                args[item] = batch_args[item][b*btsz:(b+1)*btsz]
-            sc += func(x0, **args)
-            delta = fprime(x0, **args)
-            x0 -= lr*delta
-        if mod>0:
-            for item in batch_args:
-                args[item] = batch_args[item][b*btsz:(b+1)*btsz]
-            sc += func(x0, **args)
-            delta = fprime(x0, **args)
-            x0 -= lr*btsz*x0/mod
-        scores.append(sc)
-        if verbose:
-            print sc
+    passes = 0
+    while True:
+        # prepare batches
+        start = end
+        end = start + btsz
+        for item in batch_args:
+            args[item] = batch_args[item][start:end]
+        # do the work
+        score += func(x0, **args)
+        delta = fprime(x0, **args)
+        x0 -= lr*delta
+        scores.append(score)
+        if (end >= nos):
+            # start at beginning of data again
+            end = 0
+            if verbose:
+                print "Epoch %d, Score %f" % (passes, score)
+            scores.append(score)
+            score = 0
+            passes += 1
+            if passes >= epochs:
+                break
     lr *= btsz
+    return x0, scores
+
+
+def olbfgs(func, x0, fprime, args, batch_args,
+        eta_0, m, tau, epochs, nos, btsz, verbose=False, 
+        **params):
+    """
+    """
+    SMALL = 10**-8
+    S = np.zeros((m, x0.shape[0]))
+    Y = np.zeros((m, x0.shape[0]))
+    rho = np.zeros(m)
+    alpha = np.zeros(m)
+    index = -1
+    s = 0
+    y = 0
+    iters = 0
+    start = 0
+    end = 0
+    score = 0
+    scores = []
+    passes = 0
+    while True:
+        # get batch borders
+        start = end
+        end = start+btsz
+        # get batch
+        for item in batch_args:
+            args[item] = batch_args[item][start:end]
+        score += func(x0, **args)
+        # compute update direction
+        grad = fprime(x0, **args)
+        if iters > 0:
+            eta = eta_0 * tau/(tau + iters)
+            #print 'eta', eta
+            p = eta * grad
+            S[index] = s
+            Y[index] = y
+            sy = np.dot(s, y)
+            yy = np.dot(y, y)
+            #print 'sx, yy', sy, yy
+            rho[index] = 1./sy
+            #
+            cap = min(m, iters)
+            #
+            alpha *= 0
+            #
+            counter = 0
+            i = index
+            while counter < cap:
+                counter += 1
+                alpha[i] = rho[i] * np.dot(S[i], p)
+                #print 'rho, alpha', rho[i], alpha[i]
+                p -= alpha[i] * Y[i]
+                i = (i-1)%m
+            #print
+            #
+            p *= sy/yy 
+            #
+            counter = 0
+            i = (index - (cap-1)) % m
+            while counter < cap:
+                counter += 1
+                beta = rho[i] * np.dot(Y[i], p)
+                p += (alpha[i] - beta) * S[i]
+                i = (i+1)%m
+            s = p
+        else:
+            s = -SMALL * grad
+        #
+        x0 += s
+        #
+        y = fprime(x0, **args)
+        y -= grad
+        #
+        iters += 1
+        index = (index + 1)%m
+        del grad
+        if (end >= nos):
+            # start at beginning of data again
+            end = 0
+            if verbose:
+                print passes, score
+            scores.append(score)
+            score = 0
+            passes += 1
+            if passes >= epochs:
+                break
     return x0, scores
 
 

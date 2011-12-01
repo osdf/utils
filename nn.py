@@ -111,7 +111,7 @@ def demo_mnist(hiddens, epochs, lr, btsz, lmbd, opt):
     """
     from misc import sigmoid, load_mnist
     from losses import score_xe, loss_zero_one
-    from opt import msgd
+    from opt import msgd, olbfgs
     #
     trainset, valset, testset = load_mnist()
     inputs, targets = trainset
@@ -134,10 +134,13 @@ def demo_mnist(hiddens, epochs, lr, btsz, lmbd, opt):
     params["lr"] = lr 
     params["btsz"] = btsz
     params["verbose"] = True
-    if opt is msgd:
+    if opt is olbfgs:
         params["nos"] = inputs.shape[0]
         params["args"] = {"structure": structure}
         params["batch_args"] = {"inputs": inputs, "targets": targets}
+        params["eta_0"] = lr 
+        params["tau"] = 100.
+        params["m"] = 10 
     else:
         params["args"] = (structure, inputs, targets)
         params["maxfun"] = epochs 
