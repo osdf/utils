@@ -59,11 +59,29 @@ def predictive(samples, var, mean, sqrt_prec, **params):
     """
     result = {}
     # sqrt_eqk -- square root of equivalent kernel, 
-    # compare to Bishop, p. 159
+    # compare to Bishop, p. 159.
+    # sqrt_prec is _upper-triangular_
+    # choleksy factor of precision
     sqrt_eqk = la.solve_triangular(sqrt_prec, samples.T, trans=1).T
     result["mean"] = np.dot(samples, mean)
     result["var"] = var + np.sum(sqrt_eqk**2, axis=1)
     return result 
+
+
+def bayesian_online(x, y, var, mean, cov):
+    """
+    Standard recursive least squares.
+
+    Note: Numerically problematic.
+    Missing QR/Cholesky Up/Downdate code.
+    """
+    tmp = np.dot(cov, x.T)
+    scalar = 1./var + np.dot(x, tmp)
+    # Update covariance
+    cov -= np.dot(tmp, tmp.T)/scalar
+    # Update mean, without using Kalman Gain
+    mean += var * (y - np.dot(x, mean)) * np.dot(cov, x.T)
+    return {"mean": mean, "cov": cov}
 
 
 def robust(X, t, mean_0, prec_0, 
@@ -128,6 +146,25 @@ def robust(X, t, mean_0, prec_0,
     return result
 
 
+def robust_online(x, t, lmbd, mean_0, prec_0,
+        a, b, var, eps=10**-4, **params):
+    """
+    """
+    tmp = np.dot(cov, x.T)
+    sqr = np.dot(x, tmp)
+    diff = t - np.dot(x.T, mean)
+    while True:
+        scalar = lmbd/w + sqr
+        _cov = _cov - np.dot(tmp, tmp.T)/scalar
+        _mean = mean + diff * w * tmp
+        se = (t - np.dot(x.T, _mean))**2
+        mhlb = np.dot(x, np.dot(_cov, x))
+        # a stays constant, according to formula in paper
+        b_new = b + (se + mhlb)/(2*var)
+        w_new = a/b_new
+        # sigma
+
+
 def demo_bayesian(nos, nob, var=0.1, width=0.4):
     samples = np.random.rand(nos, 1)
     centers = np.linspace(0, 1, nob)
@@ -138,9 +175,17 @@ def demo_bayesian(nos, nob, var=0.1, width=0.4):
         for j, c in enumerate(centers):
             X[i, 1+j] = np.exp(-0.5 * ((s-c)/width)**2)
     y = np.sin(2*np.pi*samples) + np.sqrt(var)*np.random.randn(nos, 1)
+    #
     m_0 = np.zeros((nob+1, 1))
     p_0 = 0.0001 * np.eye(nob+1)
     bys = bayesian(X, y, 0.1, m_0, p_0)
+    # online
+    cov = 1000. * np.eye(nob + 1)
+    mean = np.zeros((nob + 1, 1))
+    online = {"mean": mean, "cov": cov}
+    for i, r in enumerate(X):
+        online = bayesian_online(np.atleast_2d(r), y[i], 0.1, **online)
+    #
     tests = np.linspace(0, 1, 100)
     Xt = np.zeros((tests.shape[0], nob+1))
     for i, s in enumerate(tests):
@@ -148,11 +193,17 @@ def demo_bayesian(nos, nob, var=0.1, width=0.4):
         for j, c in enumerate(centers):
             Xt[i, 1+j] = np.exp(-0.5 * ((s-c)/width)**2)
     pred = predictive(Xt, **bys)
+    online["sqrt_prec"] = la.cholesky(la.inv(online["cov"]))
+    online["var"] = var
+    onpred = predictive(Xt, **online)
     import pylab
     pylab.plot(samples, y, 'ro')
     pylab.plot(tests, pred["mean"], 'g')
     pylab.fill_between(tests, pred["mean"].flatten() + np.sqrt(pred["var"]), 
             pred["mean"].flatten() - np.sqrt(pred["var"]), alpha=0.1, color='g')
+    pylab.plot(tests, onpred["mean"], 'y')
+    pylab.fill_between(tests, onpred["mean"].flatten() + np.sqrt(onpred["var"]), 
+            onpred["mean"].flatten() - np.sqrt(onpred["var"]), alpha=0.1, color='y')
     pylab.plot(tests, np.sin(2*np.pi*tests), 'r', lw=2)
 
 

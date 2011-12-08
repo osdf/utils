@@ -7,7 +7,7 @@ import numpy as np
 import scipy.linalg as la
 
 
-from misc import logsumexp, Dtable 
+from misc import Dtable
 
 
 def score(weights, structure, inputs, targets,
