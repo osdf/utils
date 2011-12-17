@@ -29,9 +29,19 @@ def Dtanh(y):
     return 1 - y**2
 
 
+def logcosh(y):
+    """
+    Smooth L1 penalty, log(cosh(y)).
+
+    First derivative is tanh.
+    """
+    return np.log(np.cosh(y))
+
+
 Dtable = {
         sigmoid: Dsigmoid,
-        np.tanh: Dtanh
+        np.tanh: Dtanh,
+        logcosh: np.tanh
         }
 
 

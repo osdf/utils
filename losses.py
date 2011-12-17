@@ -9,7 +9,7 @@ import numpy as np
 from misc import logsumexp
 
 
-def score_xe(z, targets, predict=False, error=False):
+def xe(z, targets, predict=False, error=False):
     """
     """
     if predict:
@@ -27,7 +27,7 @@ def score_xe(z, targets, predict=False, error=False):
         return xe
 
 
-def score_ssd(z, targets, predict=False, error=False):
+def ssd(z, targets, weight=0.5, predict=False, error=False):
     """
     """
     if predict:
@@ -35,21 +35,21 @@ def score_ssd(z, targets, predict=False, error=False):
     #
     err = z - targets
     if error:
-        # score + error
-        return 0.5*np.sum(err**2), err
+        # rec. error + first deriv
+        return weight*np.sum(err**2), 2*weight*err
     else:
-        # only return score
-        return 0.5*np.sum(err**2)
+        # only return reconstruction error 
+        return weight*np.sum(err**2)
 
 
-def score_mia():
+def mia():
     """
     Multiple independent attributes.
     """
     pass
 
 
-def loss_zero_one(z, targets):
+def zero_one(z, targets):
     """
     """
     return np.sum(z!=targets)

@@ -110,7 +110,7 @@ def demo_mnist(hiddens, epochs, lr, btsz, lmbd, opt):
     """
     """
     from misc import sigmoid, load_mnist
-    from losses import score_xe, loss_zero_one
+    from losses import xe, zero_one
     from opt import msgd, olbfgs
     #
     trainset, valset, testset = load_mnist()
@@ -121,7 +121,7 @@ def demo_mnist(hiddens, epochs, lr, btsz, lmbd, opt):
     structure = {}
     structure["layers"] = [(di, hiddens), (hiddens, dt)]
     structure["activs"] = [np.tanh]
-    structure["score"] = score_xe
+    structure["score"] = xe
     weights = init_weights(structure) 
     print "Training starts..."
     params = dict()
@@ -145,7 +145,7 @@ def demo_mnist(hiddens, epochs, lr, btsz, lmbd, opt):
         params["args"] = (structure, inputs, targets)
         params["maxfun"] = epochs 
     weights = opt(**params)[0]
-    print loss_zero_one(predict(weights, structure, test_in), test_tar)
+    print zero_one(predict(weights, structure, test_in), test_tar)
     return
 
 
@@ -157,9 +157,9 @@ def check_the_grad(regression=True, nos=5000, ind=30,
     #
     from opt import check_grad
     from misc import sigmoid
-    from losses import score_xe, score_ssd
+    from losses import xe, ssd
     # number of input samples (nos)
-    # with dimension d each
+    # with dimension ind each
     ins = np.random.randn(nos, ind)
     #
     structure = dict()
@@ -168,14 +168,14 @@ def check_the_grad(regression=True, nos=5000, ind=30,
     # Network with one hidden layer
         structure["layers"] = [(ind, 15), (15, outd)]
         structure["activs"] = [np.tanh]
-        structure["score"] = score_ssd
+        structure["score"] = ssd
         outs = np.random.randn(nos, outd)
     else:
         # Classification
         classes = 10
         structure["layers"] = [(ind, 15), (15, classes)]
         structure["activs"] = [sigmoid]
-        structure["score"] = score_xe
+        structure["score"] = xe
         outs = np.random.random_integers(classes, size=(nos)) - 1
     weights = init_weights(structure) 
     cg = dict()
