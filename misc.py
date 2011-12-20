@@ -82,3 +82,61 @@ def load_mnist():
     f = gzip.open('mnist.pkl.gz','rb')
     trainset, valset, testset = cPickle.load(f)
     return trainset, valset, testset
+
+
+def _scale_01(arr, eps=1e-10):
+    """
+    scale arr between [0,1].
+    useful for gray images to be produced with PIL
+    """
+    newarr = arr.copy()
+    newarr -= newarr.min()
+    newarr *= 1.0/(newarr.max() + eps)
+    return newarr
+
+
+def receptive(array, ind):
+    """
+    Visualize receptive fields.
+    """
+    try:
+        import Image as img 
+    except:
+        import PIL as img
+    #
+    sz = array.size
+    fields = array.reshape(ind, sz/ind).T
+    tiles = int(np.sqrt(sz/ind)) + 1
+    shape = int(np.sqrt(ind))
+    pixels = tiles * shape + tiles + 1
+    tiling = np.zeros((pixels, pixels), dtype = 'uint8')
+    for row in xrange(tiles):
+        for col in xrange(tiles):
+            if (col+row*tiles) < fields.shape[0]:
+                tile = fields[col + row * tiles].reshape(shape, shape)
+                tile = _scale_01(tile) * 255
+                tiling[shape * row + row + 1:shape * (row+1) + row + 1,\
+                        shape * col + col + 1:shape * (col+1) + col + 1] = tile
+    return img.fromarray(tiling)
+
+
+def dn(data):
+    """
+    Devisive normalization
+    """
+    pass
+
+
+def cn(data):
+    """
+    Coordinate wise normalization.
+    
+    Every coordinate ('feature') becomes
+    zero-mean and unit-std normalized.
+    Changes data *inplace*.
+    """
+    mu = data.mean(axis=0)
+    std = data.std(axis=0)
+    data -= mu
+    data /= std
+    return 

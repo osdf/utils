@@ -128,12 +128,6 @@ def demo_mnist(hiddens, epochs, lr, btsz, lmbd, opt):
     params["func"] = score
     params["x0"] = weights
     params["fprime"] = grad
-    params["inputs"] = inputs
-    params["targets"] = targets
-    params["epochs"] = epochs
-    params["lr"] = lr 
-    params["btsz"] = btsz
-    params["verbose"] = True
     if opt is olbfgs:
         params["nos"] = inputs.shape[0]
         params["args"] = {"structure": structure}

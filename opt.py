@@ -93,10 +93,9 @@ def olbfgs(func, x0, fprime, args, batch_args,
     scores = []
     passes = 0
     while True:
-        # get batch borders
+        # get batch
         start = end
         end = start+btsz
-        # get batch
         for item in batch_args:
             args[item] = batch_args[item][start:end]
         score += func(x0, **args)

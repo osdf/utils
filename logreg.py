@@ -8,7 +8,7 @@ import scipy.linalg as la
 
 
 from misc import logsumexp
-from losses import score_xe
+from losses import xe
 
 
 def score(weights, inputs, targets=None, 
@@ -18,7 +18,7 @@ def score(weights, inputs, targets=None,
     _, di = inputs.shape
     dt = weights.shape[0]/(di + 1)
     z = np.dot(inputs, weights[:di*dt].reshape(di, dt)) + weights[di*dt:]
-    return score_xe(z, targets=targets, predict=predict, error=error)
+    return xe(z, targets=targets, predict=predict, error=error)
 
 
 def predict(weights, inputs, **params):
@@ -60,13 +60,14 @@ def check_the_grad(nos=1000, ind=30, classes=5, eps=10**-6):
     assert delta < 10**-4, "[logreg.py] check_the_gradient FAILED. Delta is %f" % delta
     return True
 
-def demo_mnist(epochs, lr, btsz, opt):
+def demo_mnist(epochs, lr, btsz, opti):
     """
     """
-    from misc import sigmoid, load_mnist
-    from losses import score_xe, loss_zero_one
+    from misc import load_mnist
+    from losses import zero_one
     from opt import msgd
     #
+    opti = msgd
     trainset, valset, testset = load_mnist()
     inputs, targets = trainset
     test_in, test_tar = testset
@@ -81,19 +82,17 @@ def demo_mnist(epochs, lr, btsz, opt):
     params["func"] = score
     params["x0"] = weights
     params["fprime"] = grad
-    params["inputs"] = inputs
-    params["targets"] = targets
-    params["epochs"] = epochs
-    params["lr"] = lr 
-    params["btsz"] = btsz
-    params["verbose"] = True
-    if opt is msgd:
+    if opti is msgd:
         params["nos"] = inputs.shape[0]
         params["args"] = {}
         params["batch_args"] = {"inputs": inputs, "targets": targets}
+        params["epochs"] = epochs
+        params["lr"] = lr 
+        params["btsz"] = btsz
+        params["verbose"] = True
     else:
         params["args"] = (inputs, targets)
         params["maxfun"] = epochs 
-    weights = opt(**params)[0]
-    print loss_zero_one(predict(weights, test_in), test_tar)
-    return
+    weights = opti(**params)[0]
+    print zero_one(predict(weights, test_in), test_tar)
+    return weights
