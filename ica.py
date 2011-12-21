@@ -67,6 +67,21 @@ def grad(weights, structure, inputs, **params):
     return g
 
 
+def grad_norm(weights, structure, inputs, **params):
+    """
+    """
+    eps = 10**-4
+    ind = structure["ind"]
+    hid = structure["hid"]
+    w = weights.reshape(ind, hid)
+    _l2 = np.sqrt(np.sum(w ** 2, axis=0) + eps)
+    _w = w/_l2
+    _g = grad(_w.flatten(), structure, inputs, **params)
+    _g = _g.reshape(ind, hid)
+    g = _g/_l2 - _w * (np.sum(_g * w, axis=0))/(_l2 **2)
+    return g.flatten()
+
+
 def check_the_grad(nos=5000, ind=30, outd=10,
         eps=10**-4, verbose=False):
     """
@@ -82,7 +97,7 @@ def check_the_grad(nos=5000, ind=30, outd=10,
     weights = 0.01*np.random.randn(ind, outd).flatten()
     structure = dict()
     structure["l1"] = logcosh
-    structure["lmbd"] = 0.1
+    structure["lmbd"] = 5*10**3 
     structure["ind"] = ind
     structure["hid"] = outd
     #
@@ -95,25 +110,25 @@ def check_the_grad(nos=5000, ind=30, outd=10,
     return True
 
 
-def test_cifar(gray, outd, epochs):
+def test_cifar(gray, outd, lmbd, epochs):
     """
     """
     from opt import lbfgsb, msgd
     from misc import logcosh, cn
     #
-    opti = msgd
+    opti = lbfgsb
     n, ind = gray.shape
-    weights = 0.001*np.random.randn(ind, outd).flatten()
+    weights = 0.01*np.random.randn(ind, outd).flatten()
     structure = dict()
     structure["l1"] = logcosh
-    structure["lmbd"] = 0.1
+    structure["lmbd"] = lmbd
     structure["ind"] = ind
     structure["hid"] = outd
     #
     params = dict()
     params["func"] = score
     params["x0"] = weights
-    params["fprime"] = grad
+    params["fprime"] = grad_norm
     if opti is msgd:
         params["nos"] = gray.shape[0]
         params["args"] = {"structure": structure}
