@@ -106,11 +106,13 @@ def receptive(array, ind):
     #
     sz = array.size
     fields = array.reshape(ind, sz/ind).T
-    tiles = int(np.sqrt(sz/ind)) + 1
+    tiles = int(np.sqrt(sz/ind))
+    notsquare = np.ceil( ((sz/ind) - (tiles**2))/(1.0 * tiles))
     shape = int(np.sqrt(ind))
-    pixels = tiles * shape + tiles + 1
-    tiling = np.zeros((pixels, pixels), dtype = 'uint8')
-    for row in xrange(tiles):
+    pixelsy = (tiles + notsquare) * shape + (tiles + notsquare) + 1
+    pixelsx = tiles * shape + tiles + 1
+    tiling = np.zeros((pixelsy, pixelsx), dtype = 'uint8')
+    for row in xrange(tiles + notsquare):
         for col in xrange(tiles):
             if (col+row*tiles) < fields.shape[0]:
                 tile = fields[col + row * tiles].reshape(shape, shape)
