@@ -38,10 +38,25 @@ def logcosh(y):
     return np.log(np.cosh(y))
 
 
+def sqrtsqr(y, eps=10**-5):
+    """
+    L1 penalty.
+    """
+    return np.sqrt(eps + y**2)
+
+
+def Dsqrtsqr(y, eps=10**-5):
+    """
+    """
+    tmp = 1./np.sqrt(eps + y**2)
+    return y * tmp
+
+
 Dtable = {
         sigmoid: Dsigmoid,
         np.tanh: Dtanh,
-        logcosh: np.tanh
+        logcosh: np.tanh,
+        sqrtsqr: Dsqrtsqr
         }
 
 
@@ -122,11 +137,14 @@ def receptive(array, ind):
     return img.fromarray(tiling)
 
 
-def dn(data):
+def dn(data, eps=10**-6):
     """
-    Devisive normalization
+    Devisive normalization.
+
+    _data_ consists of rows.
     """
-    pass
+    norm = np.sqrt(np.sum(data**2, axis=1) + eps)
+    data /= np.atleast_2d(norm).T
 
 
 def cn(data):

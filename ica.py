@@ -64,7 +64,7 @@ def grad(weights, structure, inputs, **params):
     return g
 
 
-def grad_norm(weights, structure, inputs, eps=10**-4, **params):
+def grad_norm(weights, structure, inputs, eps=10**-5, **params):
     """
     """
     ind = structure["ind"]
@@ -72,8 +72,7 @@ def grad_norm(weights, structure, inputs, eps=10**-4, **params):
     w = weights.reshape(ind, hid)
     _l2 = np.sqrt(np.sum(w ** 2, axis=0) + eps)
     _w = w/_l2
-    _g = grad(_w.flatten(), structure, inputs, **params)
-    _g = _g.reshape(ind, hid)
+    _g = grad(_w.flatten(), structure, inputs, **params).reshape(ind, hid)
     g = _g/_l2 - _w * (np.sum(_g * w, axis=0))/(_l2 **2)
     return g.flatten()
 
@@ -85,15 +84,15 @@ def check_the_grad(nos=5000, ind=30, outd=10,
     """
     #
     from opt import check_grad
-    from misc import logcosh
+    from misc import logcosh, sqrtsqr
     # number of input samples (nos)
     # with dimension ind each
     ins = np.random.randn(nos, ind)
     #
     weights = 0.001*np.random.randn(ind, outd).flatten()
     structure = dict()
-    structure["l1"] = logcosh
-    structure["lmbd"] = 1
+    structure["l1"] = sqrtsqr
+    structure["lmbd"] = 1 
     structure["ind"] = ind
     structure["hid"] = outd
     #
@@ -110,13 +109,13 @@ def test_cifar(gray, outd, lmbd, epochs):
     """
     """
     from opt import lbfgsb, msgd
-    from misc import logcosh, cn
+    from misc import logcosh, sqrtsqr
     #
-    opti = lbfgsb
+    opti = msgd 
     n, ind = gray.shape
     weights = 0.01*np.random.randn(ind, outd).flatten()
     structure = dict()
-    structure["l1"] = logcosh
+    structure["l1"] = sqrtsqr
     structure["lmbd"] = lmbd
     structure["ind"] = ind
     structure["hid"] = outd
