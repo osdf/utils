@@ -33,18 +33,15 @@ def score(weights, structure, inputs,
     z = np.dot(ic, weights.reshape(ind, hid).T)
     # smooth l1 penalty cost
     l1 = structure["l1"]
-    pl1 = np.sum(l1(ic))
-    # scale for reconstruction cost 
-    scale = structure["lmbd"]/n
+    pl1 = structure["lmbd"] * np.sum(l1(ic))
     if error:
-        sc, err = ssd(z, inputs, weight=scale,
-                predict=False, error=True)
+        sc, err = ssd(z, inputs, predict=False, error=True)
         sc += pl1
         # returns first derivative of rec. error!
         return sc, err 
     else:
-        sc = ssd(z, inputs, weight=scale,
-                predict=False, error=False) + pl1
+        sc = ssd(z, inputs, predict=False, error=False) +\
+                structure["lmbd"]*pl1
         return sc
 
 
@@ -63,14 +60,13 @@ def grad(weights, structure, inputs, **params):
     #
     g = np.dot(ic.T, delta).T.flatten()
     g += np.dot(inputs.T, Dsc_Dic).flatten()
-    g += np.dot(inputs.T, Dtable[l1](ic)).flatten()
+    g += structure["lmbd"] * np.dot(inputs.T, Dtable[l1](ic)).flatten()
     return g
 
 
-def grad_norm(weights, structure, inputs, **params):
+def grad_norm(weights, structure, inputs, eps=10**-4, **params):
     """
     """
-    eps = 10**-4
     ind = structure["ind"]
     hid = structure["hid"]
     w = weights.reshape(ind, hid)
@@ -94,10 +90,10 @@ def check_the_grad(nos=5000, ind=30, outd=10,
     # with dimension ind each
     ins = np.random.randn(nos, ind)
     #
-    weights = 0.01*np.random.randn(ind, outd).flatten()
+    weights = 0.001*np.random.randn(ind, outd).flatten()
     structure = dict()
     structure["l1"] = logcosh
-    structure["lmbd"] = 5*10**3 
+    structure["lmbd"] = 1
     structure["ind"] = ind
     structure["hid"] = outd
     #

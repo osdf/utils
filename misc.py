@@ -107,7 +107,7 @@ def receptive(array, ind):
     sz = array.size
     fields = array.reshape(ind, sz/ind).T
     tiles = int(np.sqrt(sz/ind))
-    notsquare = np.ceil( ((sz/ind) - (tiles**2))/(1.0 * tiles))
+    notsquare = np.ceil( ((sz/ind) - (tiles**2))/(1.0 * tiles) )
     shape = int(np.sqrt(ind))
     pixelsy = (tiles + notsquare) * shape + (tiles + notsquare) + 1
     pixelsx = tiles * shape + tiles + 1
