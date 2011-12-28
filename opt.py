@@ -35,9 +35,9 @@ def check_grad(f, fprime, x0, args, eps=10**-4, verbose=False):
     return np.sqrt(delta_2)
 
 
-def msgd(func, x0, fprime, args, batch_args,
-        epochs, nos, lr, btsz, verbose=False, 
-        **params):
+def msgd(x0, fandprime, args, batch_args,
+        epochs, nos, lr, btsz, beta = 0., 
+        verbose=False, **params):
     """
     Minibatch stochastic gradient descent.
     """
@@ -48,6 +48,7 @@ def msgd(func, x0, fprime, args, batch_args,
     score = 0
     scores = []
     passes = 0
+    _delta = 0
     while True:
         # prepare batches
         start = end
@@ -55,10 +56,11 @@ def msgd(func, x0, fprime, args, batch_args,
         for item in batch_args:
             args[item] = batch_args[item][start:end]
         # do the work
-        score += func(x0, **args)
-        delta = fprime(x0, **args)
+        sc, delta = fandprime(x0, **args)
+        delta += beta * _delta
+        _delta = delta
         x0 -= lr*delta
-        scores.append(score)
+        score += sc
         if (end >= nos):
             # start at beginning of data again
             end = 0
@@ -73,15 +75,16 @@ def msgd(func, x0, fprime, args, batch_args,
     return x0, scores
 
 
-def olbfgs(func, x0, fprime, args, batch_args,
+def olbfgs(x0, fandprime, args, batch_args,
         eta_0, m, tau, epochs, nos, btsz, verbose=False, 
         **params):
     """
     """
-    SMALL = 10**-8
+    SMALL = 10**-10
     S = np.zeros((m, x0.shape[0]))
     Y = np.zeros((m, x0.shape[0]))
     rho = np.zeros(m)
+    delta = np.zeros(m)
     alpha = np.zeros(m)
     index = -1
     s = 0
@@ -98,55 +101,64 @@ def olbfgs(func, x0, fprime, args, batch_args,
         end = start+btsz
         for item in batch_args:
             args[item] = batch_args[item][start:end]
-        score += func(x0, **args)
+        score, grad = fandprime(x0, **args)
         # compute update direction
-        grad = fprime(x0, **args)
         if iters > 0:
             eta = eta_0 * tau/(tau + iters)
             #print 'eta', eta
-            p = eta * grad
-            S[index] = s
-            Y[index] = y
+            p = -eta * grad
             sy = np.dot(s, y)
-            yy = np.dot(y, y)
-            #print 'sx, yy', sy, yy
-            rho[index] = 1./sy
-            #
-            cap = min(m, iters)
+            if sy < 10**-8:
+                print "Skipping update", iters, sy, start
+                index = (index - 1)%m
+                cap = min(m, iters-1)
+            else:
+                S[index] = s
+                Y[index] = y
+                yy = np.dot(y, y) 
+                #print 'sx, yy', sy, yy
+                rho[index] = 1./sy
+                delta[index] = sy/yy
+                #
+                cap = min(m, iters)
             #
             alpha *= 0
             #
-            counter = 0
             i = index
-            while counter < cap:
-                counter += 1
+            weight = 0
+            for _t in xrange(cap):
                 alpha[i] = rho[i] * np.dot(S[i], p)
                 #print 'rho, alpha', rho[i], alpha[i]
                 p -= alpha[i] * Y[i]
+                # weight update
+                weight += delta[i]
+                #print "-", i
                 i = (i-1)%m
-            #print
+            #print "done with -", weight/cap
             #
-            p *= sy/yy 
+            p *= (weight/cap)
             #
             counter = 0
             i = (index - (cap-1)) % m
-            while counter < cap:
-                counter += 1
+            for _t in xrange(cap):
                 beta = rho[i] * np.dot(Y[i], p)
                 p += (alpha[i] - beta) * S[i]
+                #print "+", i
                 i = (i+1)%m
+            #print "done with + "
             s = p
         else:
             s = -SMALL * grad
         #
         x0 += s
         #
-        y = fprime(x0, **args)
+        _sc, y = fandprime(x0, **args)
         y -= grad
         #
         iters += 1
         index = (index + 1)%m
         del grad
+        #print score
         if (end >= nos):
             # start at beginning of data again
             end = 0
@@ -158,6 +170,28 @@ def olbfgs(func, x0, fprime, args, batch_args,
             if passes >= epochs:
                 break
     return x0, scores
+
+
+def lbfgs(x0, fandprime, corrections):
+    """
+    """
+    pass
+#    g = ...
+#    t = 0
+#    for iters in xrange(maxiters):
+#        if iters == 1:
+#            # Start with steepes desecent direction
+#            d = -g
+#        else:
+#            lbfgsUpdate(y, s, corrections, dirs, steps, Hdiag, idx)
+#            d = lbfgsDir(-g, dirs, steps, Hdiag, idx) 
+#        g_old = g
+#        #
+#        check_progress
+#        # Initial guess for steprate
+#        t = 1
+#        f_old = f
+#        gtd_old = gtd
 
 
 def lbfgsb(func, x0, fprime=None, args=(), approx_grad=0, 
@@ -183,3 +217,8 @@ def tnc(func, x0, fprime=None, args=(), approx_grad=0, bounds=None,
             maxCGit=maxCGit, maxfun=maxfun, eta=eta, stepmx=stepmx, 
             accuracy=accuracy, fmin=fmin, ftol=ftol, xtol=xtol, 
             pgtol=pgtol, rescale=rescale, disp=disp)
+
+def test_olbfgs(lr):
+    import nn
+    nn.demo_mnist(hiddens=300, opt=olbfgs, epochs=5, lr=lr, 
+            btsz=128, tau=10000, m=50)

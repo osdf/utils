@@ -137,7 +137,7 @@ def receptive(array, ind):
     return img.fromarray(tiling)
 
 
-def dn(data, eps=10**-6):
+def dn(data, eps=10**-8):
     """
     Devisive normalization.
 

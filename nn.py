@@ -43,7 +43,7 @@ def score(weights, structure, inputs, targets,
     return sc(z, targets, predict=predict, error=error)
 
 
-def grad(weights, structure, inputs, targets, **params):
+def score_grad(weights, structure, inputs, targets, **params):
     """
     """
     g = np.zeros(weights.shape)
@@ -79,7 +79,7 @@ def grad(weights, structure, inputs, targets, **params):
         tmp = h
     # clean up structure
     del structure["hiddens"]
-    return g
+    return sc, g
 
 
 def predict(weights, structure, inputs, **params):
@@ -106,7 +106,7 @@ def init_weights(structure, var=0.01):
     return weights
 
 
-def demo_mnist(hiddens, epochs, lr, btsz, lmbd, opt):
+def demo_mnist(hiddens, opt, epochs=10, lr=0.1, btsz=128, tau=1000, m=50):
     """
     """
     from misc import sigmoid, load_mnist
@@ -125,16 +125,18 @@ def demo_mnist(hiddens, epochs, lr, btsz, lmbd, opt):
     weights = init_weights(structure) 
     print "Training starts..."
     params = dict()
-    params["func"] = score
     params["x0"] = weights
-    params["fprime"] = grad
+    params["fandprime"] = score_grad
     if opt is olbfgs:
         params["nos"] = inputs.shape[0]
         params["args"] = {"structure": structure}
         params["batch_args"] = {"inputs": inputs, "targets": targets}
         params["eta_0"] = lr 
-        params["tau"] = 100.
-        params["m"] = 10 
+        params["tau"] = tau 
+        params["m"] = m
+        params["epochs"] = epochs
+        params["btsz"] = btsz
+        params["verbose"] = True
     else:
         params["args"] = (structure, inputs, targets)
         params["maxfun"] = epochs 
