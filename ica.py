@@ -129,7 +129,7 @@ def check_the_grad(nos=5000, ind=30, outd=10,
 
 
 def test_cifar(gray, outd, lmbd, epochs, lr=0.01, btsz=128,
-        beta=0.9, m=100):
+        beta=0.9, m=100, w = None):
     """
     """
     from opt import lbfgsb, msgd
@@ -137,7 +137,10 @@ def test_cifar(gray, outd, lmbd, epochs, lr=0.01, btsz=128,
     #
     opti = msgd 
     n, ind = gray.shape
-    weights = 0.0001*np.random.randn(ind, outd).flatten()
+    if w = None
+        weights = 0.0001*np.random.randn(ind, outd).flatten()
+    else:
+        weights = w
     structure = dict()
     structure["l1"] = sqrtsqr
     structure["lmbd"] = lmbd
