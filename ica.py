@@ -137,9 +137,11 @@ def test_cifar(gray, outd, lmbd, epochs, lr=0.01, btsz=128,
     #
     opti = msgd 
     n, ind = gray.shape
-    if w = None
+    if w is None:
+        print "Init new random weights."
         weights = 0.0001*np.random.randn(ind, outd).flatten()
     else:
+        print "Continue with provided w."
         weights = w
     structure = dict()
     structure["l1"] = sqrtsqr
