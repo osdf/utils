@@ -27,7 +27,7 @@ def predict(weights, inputs, **params):
     return score(weights, inputs, targets=None, predict=True)
 
 
-def grad(weights, inputs, targets, **params):
+def score_grad(weights, inputs, targets, **params):
     """
     Compute the (batch) gradient at _weights_
     for training set _inputs_/_targets_.
@@ -35,11 +35,18 @@ def grad(weights, inputs, targets, **params):
     """
     n, di = inputs.shape
     dt = np.max(targets) + 1
-    g = np.zeros(weights.shape)
+    g = np.zeros(weights.shape, dtype=weights.dtype)
     xe, error = score(weights, inputs, targets, predict=False, error=True)
     # one signal per input sample
     g[:di*dt] = np.dot(inputs.T, error).flatten()
     g[di*dt:] = error.sum(axis=0)
+    return xe, g
+
+
+def grad(weights, inputs, targets, **params):
+    """
+    """
+    _, g = score_grad(weights, inputs, targets, **params)
     return g
 
 
@@ -65,9 +72,9 @@ def demo_mnist(epochs, lr, btsz, opti):
     """
     from misc import load_mnist
     from losses import zero_one
-    from opt import msgd
+    from opt import msgd, smd
     #
-    opti = msgd
+    opti = smd 
     trainset, valset, testset = load_mnist()
     inputs, targets = trainset
     test_in, test_tar = testset
@@ -75,14 +82,16 @@ def demo_mnist(epochs, lr, btsz, opti):
     di = inputs.shape[1]
     dt = np.max(targets) + 1
     # setup weights
-    weights = 0.01 * np.random.randn(di*dt+dt)
+    # np.complex is necessary for smd (as of now)
+    weights = np.zeros((di*dt+dt), dtype=np.complex)
+    weights[:] = 0.01 * np.random.randn(di*dt+dt)
     weights[-dt:] = 0.
     print "Training starts..."
     params = dict()
     params["func"] = score
     params["x0"] = weights
-    params["fprime"] = grad
-    if opti is msgd:
+    params["fandprime"] = score_grad
+    if opti is msgd or opti is smd:
         params["nos"] = inputs.shape[0]
         params["args"] = {}
         params["batch_args"] = {"inputs": inputs, "targets": targets}

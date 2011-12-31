@@ -8,7 +8,7 @@ import scipy.linalg as la
 from scipy.optimize import fmin_l_bfgs_b, fmin_tnc
 
 
-def check_grad(f, fprime, x0, args, eps=10**-4, verbose=False):
+def check_grad(f, fprime, x0, args, eps=10**-8, verbose=False):
     """
     """
     # computed gradient at x0
@@ -35,6 +35,59 @@ def check_grad(f, fprime, x0, args, eps=10**-4, verbose=False):
     return np.sqrt(delta_2)
 
 
+def smd(x0, fandprime, args, batch_args,
+        epochs, nos, lmbd=0.9, mu=0.02, 
+        eta0=0.005, btsz=5, verbose=False, **params):
+    """
+
+    """
+    ii = 1e-150j
+    p = np.size(x0)
+    v = np.zeros(p)
+    eta = eta0 * np.ones(p)
+    #
+    # here: do one pass over dataset with inital x0?
+    #
+    start = 0
+    end = 0
+    score = 0
+    scores = []
+    passes = 0
+    print nos
+    while True:
+        # prepare batches
+        start = end
+        end = start + btsz
+        for item in batch_args:
+            args[item] = batch_args[item][start:end]
+        # Nic Schraudolph complex number trick
+        # see http://www.cs.toronto.edu/~vnair/ciar/mark_schmidt.pdf, p. 26
+        # Why? This trick ensures that complex numbers _numerically_
+        # behave like dual numbers (dual numbers: d**2 == 0, as opposed
+        # to complex numbers, where i**2 = -1)
+        sc, g = fandprime(x0 + ii*v, **args)
+        eta = eta * np.maximum(0.5, 1 + mu * v * np.real(g))
+        x0 -= eta * np.real(g)
+        v *= lmbd
+        v += eta*(np.real(g) - lmbd*np.imag(g)*1e150)
+        score += sc
+        # do some loggin of error, eta, v, x0, g? ?
+        if (end >= nos):
+            # do a full pass over training data to determine 
+            # training error with current parameters?
+            #
+            # start at beginning of data again
+            end = 0
+            if verbose:
+                print "Epoch %d, Score %f" % (passes, score)
+            scores.append(score)
+            score = 0
+            passes += 1
+            if passes >= epochs:
+                break
+    return x0, scores
+
+
 def msgd(x0, fandprime, args, batch_args,
         epochs, nos, lr, btsz, beta = 0., 
         verbose=False, **params):
@@ -48,7 +101,7 @@ def msgd(x0, fandprime, args, batch_args,
     score = 0
     scores = []
     passes = 0
-    _delta = 0
+    _d = 0
     while True:
         # prepare batches
         start = end
@@ -56,10 +109,10 @@ def msgd(x0, fandprime, args, batch_args,
         for item in batch_args:
             args[item] = batch_args[item][start:end]
         # do the work
-        sc, delta = fandprime(x0, **args)
-        delta += beta * _delta
-        _delta = delta
-        x0 -= lr*delta
+        sc, d = fandprime(x0, **args)
+        d += beta * _d
+        _d = d
+        x0 -= lr*d
         score += sc
         if (end >= nos):
             # start at beginning of data again

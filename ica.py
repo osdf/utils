@@ -75,9 +75,6 @@ def score_grad_norm(weights, structure, inputs, eps=10**-5, **params):
     # gradient from ball projection + reshaped
     sc, _g = score_grad(_w.flatten(), structure, inputs, **params)
     _g = _g.reshape(ind, hid)
-    #print "w", w
-    #print "_w", _w
-    #print "_g", _g
     g = _g/_l2 - _w * (np.sum(_g * w, axis=0))/(_l2 **2)
     return sc, g.flatten()
 
@@ -85,19 +82,8 @@ def score_grad_norm(weights, structure, inputs, eps=10**-5, **params):
 def grad_norm(weights, structure, inputs, eps=10**-5, **params):
     """
     """
-    ind = structure["ind"]
-    hid = structure["hid"]
-    w = weights.reshape(ind, hid)
-    _l2 = np.sqrt(np.sum(w ** 2, axis=0) + eps)
-    _w = w/_l2
-    # gradient from ball projection + reshaped
-    sc, _g = score_grad(_w.flatten(), structure, inputs, **params)
-    _g = _g.reshape(ind, hid)
-    #print "w", w
-    #print "_w", _w
-    #print "_g", _g
-    g = _g/_l2 - _w * (np.sum(_g * w, axis=0))/(_l2 **2)
-    return g.flatten()
+    _, g = score_grad_norm(weights, structure, inputs, eps=10**-5, **params)
+    return g
 
 
 def check_the_grad(nos=5000, ind=30, outd=10,

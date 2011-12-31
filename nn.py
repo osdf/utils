@@ -46,7 +46,7 @@ def score(weights, structure, inputs, targets,
 def score_grad(weights, structure, inputs, targets, **params):
     """
     """
-    g = np.zeros(weights.shape)
+    g = np.zeros(weights.shape, dtype=weights.dtype)
     # forward pass through model,
     # need 'error' signal at the end.
     sc, delta = score(weights, inputs=inputs, targets=targets,
@@ -82,6 +82,13 @@ def score_grad(weights, structure, inputs, targets, **params):
     return sc, g
 
 
+def grad(weights, structure, inputs, targets, **params):
+    """
+    """
+    _, g = score_grad(weights, structure, inputs, targets, **params)
+    return g
+
+
 def predict(weights, structure, inputs, **params):
     """
     """
@@ -111,7 +118,7 @@ def demo_mnist(hiddens, opt, epochs=10, lr=0.1, btsz=128, tau=1000, m=50):
     """
     from misc import sigmoid, load_mnist
     from losses import xe, zero_one
-    from opt import msgd, olbfgs
+    from opt import msgd, smd 
     #
     trainset, valset, testset = load_mnist()
     inputs, targets = trainset
