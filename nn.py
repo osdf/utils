@@ -195,7 +195,7 @@ def demo_mnist(hiddens, opt, epochs=10,
         params["lr"] = lr 
         # smd
         params["eta0"] = eta0
-        params["mu"] = mu 
+        params["mu"] = mu
         params["lmbd"] = lmbd
         params["verbose"] = True
     else:
@@ -205,5 +205,6 @@ def demo_mnist(hiddens, opt, epochs=10,
     weights = opt(**params)[0]
     print "Training done."
     #
-    print zero_one(predict(weights, structure, test_in), test_tar)
+    print "Test set performance:",\
+            zero_one(predict(weights, structure, test_in), test_tar)
     return weights

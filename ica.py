@@ -12,6 +12,7 @@ scikits.learn.
 
 
 import numpy as np
+import scipy as sp
 
 
 from losses import ssd
@@ -58,10 +59,18 @@ def score_grad(weights, structure, inputs, **params):
     ic = np.dot(inputs, weights.reshape(ind, hid))
     Dsc_Dic = np.dot(delta, weights.reshape(ind, hid))
     #
-    g = np.dot(ic.T, delta).T.flatten()
+    g = np.zeros(weights.shape, dtype=weights.dtype)
+    g += np.dot(ic.T, delta).T.flatten()
     g += np.dot(inputs.T, Dsc_Dic).flatten()
     g += structure["lmbd"] * np.dot(inputs.T, Dtable[l1](ic)).flatten()
     return sc, g
+
+
+def grad(weights, structure, inputs, **params):
+    """
+    """
+    _, g = score_grad(weights, structure, inputs, **params)
+    return g
 
 
 def score_grad_norm(weights, structure, inputs, eps=10**-5, **params):
@@ -70,7 +79,7 @@ def score_grad_norm(weights, structure, inputs, eps=10**-5, **params):
     ind = structure["ind"]
     hid = structure["hid"]
     w = weights.reshape(ind, hid)
-    _l2 = np.sqrt(np.sum(w ** 2, axis=0) + eps)
+    _l2 = sp.sqrt(np.sum(w ** 2, axis=0) + eps)
     _w = w/_l2
     # gradient from ball projection + reshaped
     sc, _g = score_grad(_w.flatten(), structure, inputs, **params)
@@ -114,65 +123,63 @@ def check_the_grad(nos=5000, ind=30, outd=10,
     return True
 
 
-def test_cifar(gray, outd, lmbd, epochs, lr=0.01, btsz=128,
-        beta=0.9, m=100, w = None):
+def test_cifar(gray, outd, lambd,
+        opt, epochs=10, btsz=100,
+        lr=1e-8, beta=0.9,
+        eta0=2e-6, mu=0.02, lmbd=0.99,
+        w=None):
     """
     """
-    from opt import lbfgsb, msgd
+    from opt import msgd, smd
     from misc import logcosh, sqrtsqr
     #
-    opti = msgd 
     n, ind = gray.shape
     if w is None:
-        print "Init new random weights."
-        weights = 0.0001*np.random.randn(ind, outd).flatten()
+        if opt is smd:
+            # needs complex initialization
+            weights = np.zeros((ind*outd), dtype=np.complex)
+            weights[:] = 0.001 * np.random.randn(ind, outd).flatten()
+        else:
+            weights = 0.001 * np.random.randn(ind, outd).flatten()
     else:
-        print "Continue with provided w."
+        print "Continue with provided weights w."
         weights = w
+        #
     structure = dict()
     structure["l1"] = sqrtsqr
-    structure["lmbd"] = lmbd
+    # function parameter lmbd is for SMD!!
+    structure["lmbd"] = lambd
     structure["ind"] = ind
     structure["hid"] = outd
     #
+    print "Training starts ..."
     params = dict()
-    params["func"] = score
     params["x0"] = weights
-    params["fandprime"] = score_grad_norm
-    params["fprime"] = grad_norm
-    if opti is msgd:
+    if opt is msgd or opt is smd:
+        params["fandprime"] = score_grad_norm
         params["nos"] = gray.shape[0]
         params["args"] = {"structure": structure}
         params["batch_args"] = {"inputs": gray}
         params["epochs"] = epochs
+        params["btsz"] = btsz
+        # msgd
         params["lr"] = lr 
-        params["btsz"] = btsz 
         params["beta"] = beta
+        # smd
+        params["eta0"] = eta0
+        params["mu"] = mu
+        params["lmbd"] = lmbd
+        #
         params["verbose"] = True
     else:
+        # opt from scipy
+        params["func"] = score
+        params["fprime"] = grad_norm
         params["args"] = (structure, gray)
-        params["m"] = m 
+        params["maxfun"] = epochs
+        params["m"] = 50
         params["factr"] = 10.
-    weights = opti(**params)[0]
+    weights = opt(**params)[0]
+    print "Training done."
+    #
     return weights
-
-
-def test_grad():
-    from misc import sqrtsqr, dn
-    structure = dict()
-    structure["l1"] = sqrtsqr
-    structure["lmbd"] = 0.005
-    structure["ind"] = 4
-    structure["hid"] = 2
-    x = np.array([[1,1,1,1], [0.5, 0, 0, 0.5]])
-    weights = np.array([1.,1,1,1,1,1,1,1])
-    dn(x)
-    print weights
-    print x
-    for i in xrange(3):
-        print
-        g = grad_norm(weights, structure, x)
-        print 'grad:', g
-        weights -=  g
-        print 'w', weights
-    print weights.reshape(4,2).T

@@ -4,6 +4,7 @@
 
 
 import numpy as np
+import scipy as sp
 import scipy.linalg as la
 
 
@@ -42,13 +43,13 @@ def sqrtsqr(y, eps=10**-5):
     """
     L1 penalty.
     """
-    return np.sqrt(eps + y**2)
+    return sp.sqrt(eps + y**2)
 
 
 def Dsqrtsqr(y, eps=10**-5):
     """
     """
-    tmp = 1./np.sqrt(eps + y**2)
+    tmp = 1./sp.sqrt(eps + y**2)
     return y * tmp
 
 

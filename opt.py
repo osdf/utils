@@ -83,6 +83,7 @@ def smd(x0, fandprime, args, batch_args,
             end = 0
             if verbose:
                 print "Epoch %d, Score %f" % (passes, score)
+                #print np.min(eta), np.max(eta)
             scores.append(score)
             score = 0
             passes += 1
@@ -228,10 +229,9 @@ def olbfgs(x0, fandprime, args, batch_args,
     return x0, scores
 
 
-def lbfgs(x0, fandprime, corrections):
-    """
-    """
-    pass
+#def lbfgs(x0, fandprime, corrections):
+#    """
+#    """
 #    g = ...
 #    t = 0
 #    for iters in xrange(maxiters):
@@ -273,8 +273,3 @@ def tnc(func, x0, fprime=None, args=(), approx_grad=0, bounds=None,
             maxCGit=maxCGit, maxfun=maxfun, eta=eta, stepmx=stepmx, 
             accuracy=accuracy, fmin=fmin, ftol=ftol, xtol=xtol, 
             pgtol=pgtol, rescale=rescale, disp=disp)
-
-def test_olbfgs(lr):
-    import nn
-    nn.demo_mnist(hiddens=300, opt=olbfgs, epochs=5, lr=lr, 
-            btsz=128, tau=10000, m=50)
