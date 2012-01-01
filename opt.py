@@ -74,7 +74,7 @@ def smd(x0, fandprime, args, batch_args,
         v *= lmbd
         v += eta*(np.real(g) - lmbd*np.imag(g)*1e150)
         score += sc
-        # do some loggin of error, eta, v, x0, g? ?
+        # do some logging of error, eta, v, x0, g??
         if (end >= nos):
             # do a full pass over training data to determine 
             # training error with current parameters?

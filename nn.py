@@ -1,5 +1,5 @@
 """
-Standard neural networks
+Standard neural network.
 """
 
 
@@ -113,6 +113,45 @@ def init_weights(structure, var=0.01):
     return weights
 
 
+def check_the_grad(regression=True, nos=5000, ind=30,
+        outd=3, classes=10, eps=10**-4, verbose=False):
+    """
+    Check gradient computation for Neural Networks.
+    """
+    #
+    from opt import check_grad
+    from misc import sigmoid
+    from losses import xe, ssd
+    # number of input samples (nos)
+    # with dimension ind each
+    ins = np.random.randn(nos, ind)
+    #
+    structure = dict()
+    if regression:
+    # Regression
+    # Network with one hidden layer
+        structure["layers"] = [(ind, 15), (15, outd)]
+        structure["activs"] = [np.tanh]
+        structure["score"] = ssd
+        outs = np.random.randn(nos, outd)
+    else:
+        # Classification
+        classes = 10
+        structure["layers"] = [(ind, 15), (15, classes)]
+        structure["activs"] = [sigmoid]
+        structure["score"] = xe
+        outs = np.random.random_integers(classes, size=(nos)) - 1
+    weights = init_weights(structure)
+    cg = dict()
+    cg["inputs"] = ins
+    cg["targets"] = outs
+    cg["structure"] = structure
+    #
+    delta = check_grad(score, grad, weights, cg, eps=eps, verbose=verbose)
+    assert delta < 10**-2, "[nn.py] check_the_grad FAILED. Delta is %f" % delta
+    return True
+
+
 def demo_mnist(hiddens, opt, epochs=10, 
         lr=0.01, btsz=128, eta0 = 0.0005, 
         mu=0.02, lmbd=0.99, weightvar=0.01, 
@@ -161,46 +200,10 @@ def demo_mnist(hiddens, opt, epochs=10,
         params["verbose"] = True
     else:
         params["args"] = (structure, inputs, targets)
-        params["maxfun"] = epochs 
+        params["maxfun"] = epochs
+        params["m"] = 25
     weights = opt(**params)[0]
+    print "Training done."
+    #
     print zero_one(predict(weights, structure, test_in), test_tar)
-    return
-
-
-def check_the_grad(regression=True, nos=5000, ind=30, 
-        outd=3, classes=10, eps=10**-4, verbose=False):
-    """
-    Check gradient computation for Neural Networks.
-    """
-    #
-    from opt import check_grad
-    from misc import sigmoid
-    from losses import xe, ssd
-    # number of input samples (nos)
-    # with dimension ind each
-    ins = np.random.randn(nos, ind)
-    #
-    structure = dict()
-    if regression:
-    # Regression    
-    # Network with one hidden layer
-        structure["layers"] = [(ind, 15), (15, outd)]
-        structure["activs"] = [np.tanh]
-        structure["score"] = ssd
-        outs = np.random.randn(nos, outd)
-    else:
-        # Classification
-        classes = 10
-        structure["layers"] = [(ind, 15), (15, classes)]
-        structure["activs"] = [sigmoid]
-        structure["score"] = xe
-        outs = np.random.random_integers(classes, size=(nos)) - 1
-    weights = init_weights(structure) 
-    cg = dict()
-    cg["inputs"] = ins
-    cg["targets"] = outs
-    cg["structure"] = structure
-    #
-    delta = check_grad(score, grad, weights, cg, eps=eps, verbose=verbose)
-    assert delta < 10**-2, "[nn.py] check_the_grad FAILED. Delta is %f" % delta
-    return True
+    return weights

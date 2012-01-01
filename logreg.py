@@ -67,6 +67,7 @@ def check_the_grad(nos=1000, ind=30, classes=5, eps=10**-6):
     assert delta < 10**-4, "[logreg.py] check_the_gradient FAILED. Delta is %f" % delta
     return True
 
+
 def demo_mnist(opt, epochs=10, 
         lr=0.1, btsz=100, eta0 = 0.0005, 
         mu=0.02, lmbd=0.99, w=None):
@@ -120,5 +121,7 @@ def demo_mnist(opt, epochs=10,
         params["maxfun"] = epochs
         params["m"] = 50
     weights = opt(**params)[0]
+    print "Training done."
+    #
     print zero_one(predict(weights, test_in), test_tar)
     return weights
