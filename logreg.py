@@ -67,14 +67,15 @@ def check_the_grad(nos=1000, ind=30, classes=5, eps=10**-6):
     assert delta < 10**-4, "[logreg.py] check_the_gradient FAILED. Delta is %f" % delta
     return True
 
-def demo_mnist(epochs, lr, btsz, opti):
+def demo_mnist(opt, epochs=10, 
+        lr=0.1, btsz=100, eta0 = 0.0005, 
+        mu=0.02, lmbd=0.99, w=None):
     """
     """
     from misc import load_mnist
     from losses import zero_one
     from opt import msgd, smd
     #
-    opti = smd 
     trainset, valset, testset = load_mnist()
     inputs, targets = trainset
     test_in, test_tar = testset
@@ -82,26 +83,42 @@ def demo_mnist(epochs, lr, btsz, opti):
     di = inputs.shape[1]
     dt = np.max(targets) + 1
     # setup weights
-    # np.complex is necessary for smd (as of now)
-    weights = np.zeros((di*dt+dt), dtype=np.complex)
-    weights[:] = 0.01 * np.random.randn(di*dt+dt)
-    weights[-dt:] = 0.
+    if w is None:
+        if opt is smd:
+            # needs complex initialization
+            weights = np.zeros((di*dt+dt), dtype=np.complex)
+            weights[:] = 0.001 * np.random.randn(di*dt+dt)
+        else:
+            weights = 0.001 * np.random.randn(di*dt+dt)
+        weights[-dt:] = 0.
+    else:
+        print "Continue with provided weights w."
+        weights = w
+    #
     print "Training starts..."
     params = dict()
-    params["func"] = score
     params["x0"] = weights
-    params["fandprime"] = score_grad
-    if opti is msgd or opti is smd:
+    if opt is msgd or opt is smd:
+        params["fandprime"] = score_grad
         params["nos"] = inputs.shape[0]
         params["args"] = {}
         params["batch_args"] = {"inputs": inputs, "targets": targets}
         params["epochs"] = epochs
-        params["lr"] = lr 
         params["btsz"] = btsz
+        # msgd
+        params["lr"] = lr 
+        # smd
+        params["eta0"] = eta0
+        params["mu"] = mu 
+        params["lmbd"] = lmbd
         params["verbose"] = True
     else:
+        # opt from scipy
+        params["func"] = score
+        params["fprime"] = grad
         params["args"] = (inputs, targets)
-        params["maxfun"] = epochs 
-    weights = opti(**params)[0]
+        params["maxfun"] = epochs
+        params["m"] = 50
+    weights = opt(**params)[0]
     print zero_one(predict(weights, test_in), test_tar)
     return weights

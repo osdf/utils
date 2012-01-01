@@ -113,7 +113,10 @@ def init_weights(structure, var=0.01):
     return weights
 
 
-def demo_mnist(hiddens, opt, epochs=10, lr=0.1, btsz=128, tau=1000, m=50):
+def demo_mnist(hiddens, opt, epochs=10, 
+        lr=0.01, btsz=128, eta0 = 0.0005, 
+        mu=0.02, lmbd=0.99, weightvar=0.01, 
+        w=None):
     """
     """
     from misc import sigmoid, load_mnist
@@ -129,20 +132,32 @@ def demo_mnist(hiddens, opt, epochs=10, lr=0.1, btsz=128, tau=1000, m=50):
     structure["layers"] = [(di, hiddens), (hiddens, dt)]
     structure["activs"] = [np.tanh]
     structure["score"] = xe
-    weights = init_weights(structure) 
+    # get weight initialized
+    if w is None:
+        weights = init_weights(structure, weightvar)
+        if opt is smd:
+            # needs complex weights
+            weights = np.asarray(weights, dtype=np.complex)
+    else:
+        print "Continue with provided weights w."
+        weights = w
+    #
     print "Training starts..."
     params = dict()
     params["x0"] = weights
     params["fandprime"] = score_grad
-    if opt is olbfgs:
+    if opt is msgd or opt is smd:
         params["nos"] = inputs.shape[0]
         params["args"] = {"structure": structure}
         params["batch_args"] = {"inputs": inputs, "targets": targets}
-        params["eta_0"] = lr 
-        params["tau"] = tau 
-        params["m"] = m
         params["epochs"] = epochs
         params["btsz"] = btsz
+        # msgd
+        params["lr"] = lr 
+        # smd
+        params["eta0"] = eta0
+        params["mu"] = mu 
+        params["lmbd"] = lmbd
         params["verbose"] = True
     else:
         params["args"] = (structure, inputs, targets)
