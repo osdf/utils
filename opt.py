@@ -36,8 +36,9 @@ def check_grad(f, fprime, x0, args, eps=10**-8, verbose=False):
 
 
 def smd(x0, fandprime, args, batch_args,
-        epochs, nos, lmbd=0.9, mu=0.02, 
-        eta0=0.005, btsz=5, verbose=False, **params):
+        epochs, nos, lmbd=0.99, mu=0.02,
+        eta0=0.0005, btsz=5, verbose=False,
+        **params):
     """
 
     """
@@ -53,21 +54,23 @@ def smd(x0, fandprime, args, batch_args,
     score = 0
     scores = []
     passes = 0
-    print nos
     while True:
         # prepare batches
         start = end
         end = start + btsz
         for item in batch_args:
             args[item] = batch_args[item][start:end]
-        # Nic Schraudolph complex number trick
+        # Nic Schraudolph's complex number trick
         # see http://www.cs.toronto.edu/~vnair/ciar/mark_schmidt.pdf, p. 26
         # Why? This trick ensures that complex numbers _numerically_
         # behave like dual numbers (dual numbers: d**2 == 0, as opposed
         # to complex numbers, where i**2 = -1)
         sc, g = fandprime(x0 + ii*v, **args)
+        #
         eta = eta * np.maximum(0.5, 1 + mu * v * np.real(g))
+        # gradient step
         x0 -= eta * np.real(g)
+        #
         v *= lmbd
         v += eta*(np.real(g) - lmbd*np.imag(g)*1e150)
         score += sc
@@ -89,7 +92,7 @@ def smd(x0, fandprime, args, batch_args,
 
 
 def msgd(x0, fandprime, args, batch_args,
-        epochs, nos, lr, btsz, beta = 0., 
+        epochs, nos, lr, btsz, beta = 0.,
         verbose=False, **params):
     """
     Minibatch stochastic gradient descent.
