@@ -20,19 +20,20 @@ def check_grad(f, fprime, x0, args, eps=10**-8, verbose=False):
         print "Number of total function calls: 2*%d"% x0.shape[0]
     for i in xrange(x0.shape[0]):
         # inplace change
-        x0[i] += eps
+        x0[i] = eps
         f1 = f(x0, **args)
         # inplace change
-        x0[i] -= 2*eps
+        x0[i] = -eps
         f2 = f(x0, **args)
         # second order approximation
         ngrad[i] = (f1-f2)/(2*eps)
-        # undo previous _inplace_ change 
-        x0[i] += eps
-    delta_2 = np.sum((grad-ngrad)**2)
+        # undo previous change 
+        x0[i] = 0. 
+    norm_diff = np.sqrt(np.sum((grad-ngrad)**2))
+    norm_sum = np.sqrt(np.sum((grad+ngrad)**2))
     if verbose:
-        print "Squared distance: %f"% delta_2
-    return np.sqrt(delta_2)
+        print "Relative norm difference: %f"% norm_diff/norm_sum 
+    return norm_diff/norm_sum
 
 
 def smd(x0, fandprime, args, batch_args,
