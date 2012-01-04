@@ -33,8 +33,8 @@ def score_grad(weights, inputs, targets, **params):
     for training set _inputs_/_targets_.
     _lmbd_ is weight decay factor.
     """
-    n, di = inputs.shape
-    dt = np.max(targets) + 1
+    _, di = inputs.shape
+    dt = weights.shape[0]/(di + 1)
     g = np.zeros(weights.shape, dtype=weights.dtype)
     xe, error = score(weights, inputs, targets, predict=False, error=True)
     # one signal per input sample
@@ -50,12 +50,13 @@ def grad(weights, inputs, targets, **params):
     return g
 
 
-def check_the_grad(nos=1000, ind=30, classes=5, eps=10**-6):
+def check_the_grad(nos=1, ind=30, classes=5,
+        eps=1e-6, verbose=False):
     """
     """
     from opt import check_grad
     #
-    weights = 0.1*np.random.randn(ind*classes + classes)
+    weights = 0.1 * np.random.randn(ind*classes + classes)
     ins = np.random.randn(nos, ind)
     outs = np.random.random_integers(classes, size=(nos)) - 1
     #
@@ -63,8 +64,9 @@ def check_the_grad(nos=1000, ind=30, classes=5, eps=10**-6):
     cg["inputs"] = ins
     cg["targets"] = outs
     #
-    delta = check_grad(score, grad, weights, cg, eps)
-    assert delta < 10**-4, "[logreg.py] check_the_gradient FAILED. Delta is %f" % delta
+    delta = check_grad(f=score, fprime=grad, x0=weights,
+            args=cg, eps=eps, verbose=verbose)
+    assert delta < 1e-4, "[logreg.py] check_the_gradient FAILED. Delta is %f" % delta
     return True
 
 

@@ -57,6 +57,7 @@ def score_grad(weights, structure, inputs, targets, **params):
     # backprop through last layer, activation fct. is id.
     l = layers[-1]
     idx = l[1]
+    # note the negative sign! Filling up gradient from _top_ layer downwards!
     g[-idx:] = delta.sum(axis=0)
     idy = idx + l[0]*l[1]
     g[-idy:-idx] = np.dot(hiddens[-1].T, delta).flatten()
@@ -113,8 +114,8 @@ def init_weights(structure, var=0.01):
     return weights
 
 
-def check_the_grad(regression=True, nos=5000, ind=30,
-        outd=3, classes=10, eps=10**-4, verbose=False):
+def check_the_grad(regression=True, nos=1, ind=30,
+        outd=3, classes=10, eps=1e-4, verbose=False):
     """
     Check gradient computation for Neural Networks.
     """
@@ -148,7 +149,7 @@ def check_the_grad(regression=True, nos=5000, ind=30,
     cg["structure"] = structure
     #
     delta = check_grad(score, grad, weights, cg, eps=eps, verbose=verbose)
-    assert delta < 10**-2, "[nn.py] check_the_grad FAILED. Delta is %f" % delta
+    assert delta < 1e-4, "[nn.py] check_the_grad FAILED. Delta is %f" % delta
     return True
 
 

@@ -8,31 +8,31 @@ import scipy.linalg as la
 from scipy.optimize import fmin_l_bfgs_b, fmin_tnc
 
 
-def check_grad(f, fprime, x0, args, eps=10**-8, verbose=False):
+def check_grad(f, fprime, x0, args, eps=1e-8, verbose=False):
     """
     """
     # computed gradient at x0
     grad = fprime(x0, **args)
     # space for the numeric gradient
     ngrad = np.zeros(grad.shape)
+    perturb = np.zeros(grad.shape)
     # for every component of x:
     if verbose: 
-        print "Number of total function calls: 2*%d"% x0.shape[0]
+        print "Number of total function calls: 2*%d=%d"% (x0.shape[0], 2*x0.shape[0])
     for i in xrange(x0.shape[0]):
         # inplace change
-        x0[i] = eps
-        f1 = f(x0, **args)
+        perturb[i] = eps
+        f1 = f(x0 + perturb, **args)
         # inplace change
-        x0[i] = -eps
-        f2 = f(x0, **args)
+        f2 = f(x0 - perturb, **args)
         # second order approximation
-        ngrad[i] = (f1-f2)/(2*eps)
-        # undo previous change 
-        x0[i] = 0. 
+        ngrad[i] = (f1 - f2)/(2*eps)
+        # undo previous change
+        perturb[i] = 0.
     norm_diff = np.sqrt(np.sum((grad-ngrad)**2))
     norm_sum = np.sqrt(np.sum((grad+ngrad)**2))
     if verbose:
-        print "Relative norm difference: %f"% norm_diff/norm_sum 
+        print "Relative norm difference:", norm_diff/norm_sum
     return norm_diff/norm_sum
 
 
@@ -133,102 +133,103 @@ def msgd(x0, fandprime, args, batch_args,
     return x0, scores
 
 
-def olbfgs(x0, fandprime, args, batch_args,
-        eta_0, m, tau, epochs, nos, btsz, verbose=False, 
-        **params):
-    """
-    """
-    SMALL = 10**-10
-    S = np.zeros((m, x0.shape[0]))
-    Y = np.zeros((m, x0.shape[0]))
-    rho = np.zeros(m)
-    delta = np.zeros(m)
-    alpha = np.zeros(m)
-    index = -1
-    s = 0
-    y = 0
-    iters = 0
-    start = 0
-    end = 0
-    score = 0
-    scores = []
-    passes = 0
-    while True:
-        # get batch
-        start = end
-        end = start+btsz
-        for item in batch_args:
-            args[item] = batch_args[item][start:end]
-        score, grad = fandprime(x0, **args)
-        # compute update direction
-        if iters > 0:
-            eta = eta_0 * tau/(tau + iters)
-            #print 'eta', eta
-            p = -eta * grad
-            sy = np.dot(s, y)
-            if sy < 10**-8:
-                print "Skipping update", iters, sy, start
-                index = (index - 1)%m
-                cap = min(m, iters-1)
-            else:
-                S[index] = s
-                Y[index] = y
-                yy = np.dot(y, y) 
-                #print 'sx, yy', sy, yy
-                rho[index] = 1./sy
-                delta[index] = sy/yy
-                #
-                cap = min(m, iters)
-            #
-            alpha *= 0
-            #
-            i = index
-            weight = 0
-            for _t in xrange(cap):
-                alpha[i] = rho[i] * np.dot(S[i], p)
-                #print 'rho, alpha', rho[i], alpha[i]
-                p -= alpha[i] * Y[i]
-                # weight update
-                weight += delta[i]
-                #print "-", i
-                i = (i-1)%m
-            #print "done with -", weight/cap
-            #
-            p *= (weight/cap)
-            #
-            counter = 0
-            i = (index - (cap-1)) % m
-            for _t in xrange(cap):
-                beta = rho[i] * np.dot(Y[i], p)
-                p += (alpha[i] - beta) * S[i]
-                #print "+", i
-                i = (i+1)%m
-            #print "done with + "
-            s = p
-        else:
-            s = -SMALL * grad
-        #
-        x0 += s
-        #
-        _sc, y = fandprime(x0, **args)
-        y -= grad
-        #
-        iters += 1
-        index = (index + 1)%m
-        del grad
-        #print score
-        if (end >= nos):
-            # start at beginning of data again
-            end = 0
-            if verbose:
-                print passes, score
-            scores.append(score)
-            score = 0
-            passes += 1
-            if passes >= epochs:
-                break
-    return x0, scores
-
+#def olbfgs(x0, fandprime, args, batch_args,
+#        eta_0, m, tau, epochs, nos, btsz, verbose=False,
+#        **params):
+#    """
+#    This is not kosher at all, please fix!
+#    """
+#    SMALL = 10**-10
+#    S = np.zeros((m, x0.shape[0]))
+#    Y = np.zeros((m, x0.shape[0]))
+#    rho = np.zeros(m)
+#    delta = np.zeros(m)
+#    alpha = np.zeros(m)
+#    index = -1
+#    s = 0
+#    y = 0
+#    iters = 0
+#    start = 0
+#    end = 0
+#    score = 0
+#    scores = []
+#    passes = 0
+#    while True:
+#        # get batch
+#        start = end
+#        end = start+btsz
+#        for item in batch_args:
+#            args[item] = batch_args[item][start:end]
+#        score, grad = fandprime(x0, **args)
+#        # compute update direction
+#        if iters > 0:
+#            eta = eta_0 * tau/(tau + iters)
+#            #print 'eta', eta
+#            p = -eta * grad
+#            sy = np.dot(s, y)
+#            if sy < 10**-8:
+#                print "Skipping update", iters, sy, start
+#                index = (index - 1)%m
+#                cap = min(m, iters-1)
+#            else:
+#                S[index] = s
+#                Y[index] = y
+#                yy = np.dot(y, y) 
+#                #print 'sx, yy', sy, yy
+#                rho[index] = 1./sy
+#                delta[index] = sy/yy
+#                #
+#                cap = min(m, iters)
+#            #
+#            alpha *= 0
+#            #
+#            i = index
+#            weight = 0
+#            for _t in xrange(cap):
+#                alpha[i] = rho[i] * np.dot(S[i], p)
+#                #print 'rho, alpha', rho[i], alpha[i]
+#                p -= alpha[i] * Y[i]
+#                # weight update
+#                weight += delta[i]
+#                #print "-", i
+#                i = (i-1)%m
+#            #print "done with -", weight/cap
+#            #
+#            p *= (weight/cap)
+#            #
+#            counter = 0
+#            i = (index - (cap-1)) % m
+#            for _t in xrange(cap):
+#                beta = rho[i] * np.dot(Y[i], p)
+#                p += (alpha[i] - beta) * S[i]
+#                #print "+", i
+#                i = (i+1)%m
+#            #print "done with + "
+#            s = p
+#        else:
+#            s = -SMALL * grad
+#        #
+#        x0 += s
+#        #
+#        _sc, y = fandprime(x0, **args)
+#        y -= grad
+#        #
+#        iters += 1
+#        index = (index + 1)%m
+#        del grad
+#        #print score
+#        if (end >= nos):
+#            # start at beginning of data again
+#            end = 0
+#            if verbose:
+#                print passes, score
+#            scores.append(score)
+#            score = 0
+#            passes += 1
+#            if passes >= epochs:
+#                break
+#    return x0, scores
+#
 
 #def lbfgs(x0, fandprime, corrections):
 #    """
