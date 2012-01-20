@@ -16,7 +16,7 @@ def Dsigmoid(y):
     """
     Given y = sigmoid(x),
     what is dy/dx in terms of
-    y.
+    y!
     """
     return y*(1-y)
 
@@ -25,7 +25,7 @@ def Dtanh(y):
     """
     Given y = tanh(x),
     what is dy/dx in terms of
-    y.
+    y!
     """
     return 1 - y**2
 
@@ -39,15 +39,17 @@ def logcosh(y):
     return np.log(np.cosh(y))
 
 
-def sqrtsqr(y, eps=10**-5):
+def sqrtsqr(y, eps=1e-8):
     """
-    L1 penalty.
+    Soft L1 activation.
     """
     return sp.sqrt(eps + y**2)
 
 
-def Dsqrtsqr(y, eps=10**-5):
+def Dsqrtsqr(y, eps=1e-8):
     """
+    First derivative of sqrtsqr(y)
+    wrt y.
     """
     tmp = 1./sp.sqrt(eps + y**2)
     return y * tmp

@@ -26,8 +26,7 @@ def score(weights, structure, inputs, targets,
             # values _after_ applying activation A!
             hiddens.append(z)
         idy = idx + l[0]*l[1]
-        z = A(np.dot(z, weights[idx:idy].reshape(l[0], l[1])) \
-                + weights[idy:idy+l[1]])
+        z = A(np.dot(z, weights[idx:idy].reshape(l[0], l[1])) + weights[idy:idy+l[1]])
         idx = idy+l[1]
     if error:
         hiddens.append(z)
@@ -37,8 +36,7 @@ def score(weights, structure, inputs, targets,
     idy = idx + l[0]*l[1]
     # no activation function, 
     # everyting will be handeled by score
-    z = np.dot(z, weights[idx:idy].reshape(l[0], l[1])) \
-                + weights[idy:idy+l[1]]
+    z = np.dot(z, weights[idx:idy].reshape(l[0], l[1])) + weights[idy:idy+l[1]]
     sc = structure["score"]
     return sc(z, targets, predict=predict, error=error)
 
@@ -115,7 +113,7 @@ def init_weights(structure, var=0.01):
 
 
 def check_the_grad(regression=True, nos=1, ind=30,
-        outd=3, classes=10, eps=1e-4, verbose=False):
+        outd=3, classes=10, eps=1e-8, verbose=False):
     """
     Check gradient computation for Neural Networks.
     """
@@ -192,20 +190,23 @@ def demo_mnist(hiddens, opt, epochs=10,
         params["batch_args"] = {"inputs": inputs, "targets": targets}
         params["epochs"] = epochs
         params["btsz"] = btsz
-        # msgd
+        params["verbose"] = True
+        # for msgd
         params["lr"] = lr 
-        # smd
+        # for smd
         params["eta0"] = eta0
         params["mu"] = mu
         params["lmbd"] = lmbd
-        params["verbose"] = True
     else:
         params["args"] = (structure, inputs, targets)
         params["maxfun"] = epochs
+        # for lbfgs
         params["m"] = 25
+    
     weights = opt(**params)[0]
     print "Training done."
-    #
-    print "Test set performance:",\
-            zero_one(predict(weights, structure, test_in), test_tar)
+    
+    # Evaluate on test set
+    test_perf = zero_one(predict(weights, structure, test_in), test_tar)
+    print "Test set performance:", test_perf
     return weights

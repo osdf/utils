@@ -1,5 +1,5 @@
 """
-
+Some basic optimization facilities.
 """
 
 
@@ -10,6 +10,7 @@ from scipy.optimize import fmin_l_bfgs_b, fmin_tnc
 
 def check_grad(f, fprime, x0, args, eps=1e-8, verbose=False):
     """
+    Numerically check the gradient, using 
     """
     # computed gradient at x0
     grad = fprime(x0, **args)
@@ -20,18 +21,22 @@ def check_grad(f, fprime, x0, args, eps=1e-8, verbose=False):
     if verbose: 
         print "Number of total function calls: 2*%d=%d"% (x0.shape[0], 2*x0.shape[0])
     for i in xrange(x0.shape[0]):
-        # inplace change
+        # don't do inplace change of x0[i] with eps
         perturb[i] = eps
         f1 = f(x0 + perturb, **args)
-        # inplace change
+
         f2 = f(x0 - perturb, **args)
+
         # second order approximation
         ngrad[i] = (f1 - f2)/(2*eps)
+
         # undo previous change
         perturb[i] = 0.
+
     norm_diff = np.sqrt(np.sum((grad-ngrad)**2))
     norm_sum = np.sqrt(np.sum((grad+ngrad)**2))
     if verbose:
+        print "Norm difference:", norm_diff
         print "Relative norm difference:", norm_diff/norm_sum
     return norm_diff/norm_sum
 
@@ -41,7 +46,7 @@ def smd(x0, fandprime, args, batch_args,
         eta0=0.0005, btsz=5, verbose=False,
         **params):
     """
-
+    Stochastic Meta Descent.
     """
     ii = 1e-150j
     p = np.size(x0)
@@ -256,6 +261,8 @@ def lbfgsb(func, x0, fprime=None, args=(), approx_grad=0,
         bounds=None, m=10, factr=10000000.0, pgtol=1e-05, 
         epsilon=1e-08, iprint=-1, maxfun=15000, disp=2, **params):
     """
+    Limited Memory BFGS (with boundary conditions).
+    A wrapper for lbfgsb from scipy.
     """
     return fmin_l_bfgs_b(func=func, x0=x0, fprime=fprime, 
             args=args, approx_grad=approx_grad, bounds=bounds, 
@@ -268,6 +275,8 @@ def tnc(func, x0, fprime=None, args=(), approx_grad=0, bounds=None,
         maxCGit=-1, maxfun=None, eta=-1, stepmx=0, accuracy=0, fmin=0, 
         ftol=-1, xtol=-1, pgtol=-1, rescale=-1, disp=5, **params):
     """
+    Nonlinear conjugate gradient descent.
+    A wrapper for tnc from scipy. 
     """
     return fmin_tnc(func=func, x0=x0, fprime=fprime, args=args, 
             approx_grad=approx_grad, bounds=bounds, epsilon=epsilon, 
