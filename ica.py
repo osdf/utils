@@ -23,26 +23,24 @@ def score(weights, structure, inputs,
         predict=False, error=False):
     """
     """
-    ind = structure["ind"]
-    hid = structure["hid"]
+    n, di = inputs.shape
+    dh = weights.shape[0]/di
     # independent components (ic): linear projections
-    ic = np.dot(inputs, weights.reshape(ind, hid))
+    ic = np.dot(inputs, weights.reshape(di, dh))
     if predict:
         return ic 
 
-    n, _ = inputs.shape
-    z = np.dot(ic, weights.reshape(ind, hid).T)
+    z = np.dot(ic, weights.reshape(di, dh).T)
     # smooth l1 penalty cost
     l1 = structure["l1"]
     pl1 = structure["lmbd"] * np.sum(l1(ic))
     if error:
         sc, err = ssd(z, inputs, predict=False, error=True)
         sc += pl1
-        # returns first derivative of rec. error!
+        # returns also first derivative of rec. error!
         return sc, err 
     else:
-        sc = ssd(z, inputs, predict=False, error=False) +\
-                structure["lmbd"]*pl1
+        sc = ssd(z, inputs, predict=False, error=False) + structure["lmbd"]*pl1
         return sc
 
 
@@ -52,13 +50,13 @@ def score_grad(weights, structure, inputs, **params):
     # get _compelete_ score and first deriv of rec. error
     sc, delta = score(weights, inputs=inputs, structure=structure, 
             predict=False, error=True, **params)
-    ind = structure["ind"]
-    hid = structure["hid"]
+    n, di = inputs.shape
+    dh = weights.shape[0]/di
     l1 = structure["l1"]
-    #
-    ic = np.dot(inputs, weights.reshape(ind, hid))
-    Dsc_Dic = np.dot(delta, weights.reshape(ind, hid))
-    #
+
+    ic = np.dot(inputs, weights.reshape(di, dh))
+    Dsc_Dic = np.dot(delta, weights.reshape(di, dh))
+
     g = np.zeros(weights.shape, dtype=weights.dtype)
     g += np.dot(ic.T, delta).T.flatten()
     g += np.dot(inputs.T, Dsc_Dic).flatten()
@@ -73,17 +71,20 @@ def grad(weights, structure, inputs, **params):
     return g
 
 
-def score_grad_norm(weights, structure, inputs, eps=10**-5, **params):
+def score_grad_norm(weights, structure, inputs, eps=1e-8, **params):
     """
     """
-    ind = structure["ind"]
-    hid = structure["hid"]
+    n, di = inputs.shape
+    dh = weights.shape[0]/di
+
     w = weights.reshape(ind, hid)
-    _l2 = sp.sqrt(np.sum(w ** 2, axis=0) + eps)
+    _l2 = sp.sqrt(np.sum(w**2, axis=0) + eps)
     _w = w/_l2
+
     # gradient from ball projection + reshaped
     sc, _g = score_grad(_w.flatten(), structure, inputs, **params)
     _g = _g.reshape(ind, hid)
+
     g = _g/_l2 - _w * (np.sum(_g * w, axis=0))/(_l2 **2)
     return sc, g.flatten()
 
@@ -95,66 +96,72 @@ def grad_norm(weights, structure, inputs, eps=10**-5, **params):
     return g
 
 
-def check_the_grad(nos=5000, ind=30, outd=10,
-        eps=10**-4, verbose=False):
+def check_the_grad(nos=1, ind=30, outd=10, eps=1e-8, verbose=False):
     """
-    Check gradient computation for Neural Networks.
+    Check gradient computation.
     """
-    #
     from opt import check_grad
     from misc import logcosh, sqrtsqr
     # number of input samples (nos)
     # with dimension ind each
     ins = np.random.randn(nos, ind)
-    #
-    weights = 0.001*np.random.randn(ind, outd).flatten()
+    
+    weights = 0.001 * np.random.randn(ind, outd).flatten()
+
     structure = dict()
     structure["l1"] = sqrtsqr
     structure["lmbd"] = 1 
-    structure["ind"] = ind
-    structure["hid"] = outd
-    #
-    cg = dict()
-    cg["inputs"] = ins
-    cg["structure"] = structure
-    #
-    delta = check_grad(score, grad, weights, cg, eps=eps, verbose=verbose)
-    assert delta < 10**-2, "[ica.py] check_the_grad FAILED. Delta is %f" % delta
+
+    args = dict()
+    args["inputs"] = ins
+    args["structure"] = structure
+
+    delta = check_grad(score, grad, weights, args, eps=eps, verbose=verbose)
+    
+    assert delta < 1e-4, "[ica.py] check_the_grad FAILED. Delta is %f" % delta
     return True
 
 
-def test_cifar(gray, outd, lambd,
-        opt, epochs=10, btsz=100,
-        lr=1e-8, beta=0.9,
-        eta0=2e-6, mu=0.02, lmbd=0.99,
+def test_cifar(gray, opt, dh, lambd, epochs=10, btsz=100,
+        lr=1e-8, beta=0.9, eta0=2e-6, mu=0.02, lmbd=0.99,
         w=None):
     """
+    Train on CIFAR-10 dataset. The data must be provided via _gray_. 
+    The optimizer is in _opt_ -- several of the following parameters 
+    are related to _opt_. The resulting dimension per sample is _dh_.
+    _lambd_ is the weighting of the ICA objective, see comments at the
+    top of this file. _epochs_ is the number of passes over the training
+    set. If stochastic descent is used, _btsz_ refers to the size of
+    a minibatch, _lr_ to the learning rate and _beta_ to the momentum
+    factor. Note that _lr_ needs to be very small in order to get a decent
+    training result. _eta0_, _mu_ and _lmbd_ are parameters for
+    stochastic meta descent (SMD), see opt.smd for more explanation.
+    If training should continue on some evolved weights, pass in _w_.
     """
     from opt import msgd, smd
     from misc import logcosh, sqrtsqr
     #
-    n, ind = gray.shape
+    n, di = gray.shape
     if w is None:
         if opt is smd:
-            # needs complex initialization
+            # needs np.complex initialization
             weights = np.zeros((ind*outd), dtype=np.complex)
-            weights[:] = 0.001 * np.random.randn(ind, outd).flatten()
+            weights[:] = 0.001 * np.random.randn(di, dh).flatten()
         else:
-            weights = 0.001 * np.random.randn(ind, outd).flatten()
+            weights = 0.001 * np.random.randn(di, dh).flatten()
     else:
         print "Continue with provided weights w."
         weights = w
         #
     structure = dict()
     structure["l1"] = sqrtsqr
-    # function parameter lmbd is for SMD!!
+    # parameter _lmbd_ is for SMD!
     structure["lmbd"] = lambd
-    structure["ind"] = ind
-    structure["hid"] = outd
     #
     print "Training starts ..."
     params = dict()
     params["x0"] = weights
+
     if opt is msgd or opt is smd:
         params["fandprime"] = score_grad_norm
         params["nos"] = gray.shape[0]
@@ -169,7 +176,7 @@ def test_cifar(gray, outd, lambd,
         params["eta0"] = eta0
         params["mu"] = mu
         params["lmbd"] = lmbd
-        #
+
         params["verbose"] = True
     else:
         # opt from scipy
@@ -179,7 +186,8 @@ def test_cifar(gray, outd, lambd,
         params["maxfun"] = epochs
         params["m"] = 50
         params["factr"] = 10.
+
     weights = opt(**params)[0]
     print "Training done."
-    #
+
     return weights
