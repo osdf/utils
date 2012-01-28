@@ -38,7 +38,7 @@ def score_grad(weights, inputs, targets, **params):
     g = np.zeros(weights.shape, dtype=weights.dtype)
     xe, error = score(weights, inputs, targets, predict=False, error=True)
     # one signal per input sample
-    g[:di*dt] = np.dot(inputs.T, error).flatten()
+    g[:di*dt] = np.dot(inputs.T, error).ravel()
     g[di*dt:] = error.sum(axis=0)
     return xe, g
 

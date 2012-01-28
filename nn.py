@@ -58,7 +58,7 @@ def score_grad(weights, structure, inputs, targets, **params):
     # note the negative sign! Filling up gradient from _top_ layer downwards!
     g[-idx:] = delta.sum(axis=0)
     idy = idx + l[0]*l[1]
-    g[-idy:-idx] = np.dot(hiddens[-1].T, delta).flatten()
+    g[-idy:-idx] = np.dot(hiddens[-1].T, delta).ravel()
     # new delta for one layer below
     delta = np.dot(delta, weights[-idy:-idx].reshape(l[0], l[1]).T)
     tmp = hiddens[-1]
@@ -72,7 +72,7 @@ def score_grad(weights, structure, inputs, targets, **params):
         g[-idx:-idy] = dE_da.sum(axis=0)
         idy = idx + l[0] * l[1]
         # gradient for weights in layer l
-        g[-idy:-idx] = np.dot(h.T, dE_da).flatten()
+        g[-idy:-idx] = np.dot(h.T, dE_da).ravel()
         # backprop delta
         delta = np.dot(delta, weights[-idy:-idx].reshape(l[0], l[1]).T)
         tmp = h

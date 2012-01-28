@@ -58,9 +58,9 @@ def score_grad(weights, structure, inputs, **params):
     Dsc_Dic = np.dot(delta, weights.reshape(di, dh))
 
     g = np.zeros(weights.shape, dtype=weights.dtype)
-    g += np.dot(ic.T, delta).T.flatten()
-    g += np.dot(inputs.T, Dsc_Dic).flatten()
-    g += structure["lmbd"] * np.dot(inputs.T, Dtable[l1](ic)).flatten()
+    g += np.dot(ic.T, delta).T.ravel()
+    g += np.dot(inputs.T, Dsc_Dic).ravel()
+    g += structure["lmbd"] * np.dot(inputs.T, Dtable[l1](ic)).ravel()
     return sc, g
 
 
@@ -82,11 +82,11 @@ def score_grad_norm(weights, structure, inputs, eps=1e-8, **params):
     _w = w/_l2
 
     # gradient from ball projection + reshaped
-    sc, _g = score_grad(_w.flatten(), structure, inputs, **params)
+    sc, _g = score_grad(_w.ravel(), structure, inputs, **params)
     _g = _g.reshape(ind, hid)
 
     g = _g/_l2 - _w * (np.sum(_g * w, axis=0))/(_l2 **2)
-    return sc, g.flatten()
+    return sc, g.ravel()
 
 
 def grad_norm(weights, structure, inputs, eps=10**-5, **params):
@@ -106,7 +106,7 @@ def check_the_grad(nos=1, ind=30, outd=10, eps=1e-8, verbose=False):
     # with dimension ind each
     ins = np.random.randn(nos, ind)
     
-    weights = 0.001 * np.random.randn(ind, outd).flatten()
+    weights = 0.001 * np.random.randn(ind, outd).ravel()
 
     structure = dict()
     structure["l1"] = sqrtsqr
@@ -146,9 +146,9 @@ def test_cifar(gray, opt, dh, lambd, epochs=10, btsz=100,
         if opt is smd:
             # needs np.complex initialization
             weights = np.zeros((ind*outd), dtype=np.complex)
-            weights[:] = 0.001 * np.random.randn(di, dh).flatten()
+            weights[:] = 0.001 * np.random.randn(di, dh).ravel()
         else:
-            weights = 0.001 * np.random.randn(di, dh).flatten()
+            weights = 0.001 * np.random.randn(di, dh).ravel()
     else:
         print "Continue with provided weights w."
         weights = w

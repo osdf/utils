@@ -129,8 +129,9 @@ def receptive(array, ind):
     shape = int(np.sqrt(ind))
     pixelsy = (tiles + notsquare) * shape + (tiles + notsquare) + 1
     pixelsx = tiles * shape + tiles + 1
+    # complete tiling
     tiling = np.zeros((pixelsy, pixelsx), dtype = 'uint8')
-    for row in xrange(tiles + notsquare):
+    for row in xrange(int(tiles + notsquare)):
         for col in xrange(tiles):
             if (col+row*tiles) < fields.shape[0]:
                 tile = fields[col + row * tiles].reshape(shape, shape)
@@ -140,7 +141,7 @@ def receptive(array, ind):
     return img.fromarray(tiling)
 
 
-def dn(data, eps=10**-8):
+def dn(data, eps=1e-8):
     """
     Devisive normalization.
 
@@ -148,6 +149,7 @@ def dn(data, eps=10**-8):
     """
     norm = np.sqrt(np.sum(data**2, axis=1) + eps)
     data /= np.atleast_2d(norm).T
+    return
 
 
 def cn(data):
@@ -159,7 +161,7 @@ def cn(data):
     Changes data *inplace*.
     """
     mu = data.mean(axis=0)
-    std = data.std(axis=0)
+    std = data.std(axis=0) + 1e-8
     data -= mu
     data /= std
     return 

@@ -68,7 +68,7 @@ def score_grad(weights, structure, inputs, **params):
     dfhat_dftilde = (1 - fhat * rowsum)/row_l2
     dfhat_df = np.sum(ftilde * dfhat_dftilde, axis=0)
     dfhat_dz = Dtable[af](z) * (dfhat_dftilde - ftilde*dfhat_df)/col_l2
-    grad = np.dot(inputs.T, dfhat_dz).flatten()
+    grad = np.dot(inputs.T, dfhat_dz).ravel()
 
     del structure["fhat"]
     del structure["ftilde"]
@@ -98,7 +98,7 @@ def check_the_grad(nos=100, ind=30, outd=10, eps=1e-8, verbose=False):
     from misc import sqrtsqr
 
     ins = np.random.randn(nos, ind)
-    weights = 0.001 * np.random.randn(ind, outd).flatten()
+    weights = 0.001 * np.random.randn(ind, outd).ravel()
 
     structure = dict()
     structure["af"] = sqrtsqr
@@ -123,7 +123,7 @@ def test_cifar(gray, opt, outd, epochs=10, btsz=100,
     n, ind = gray.shape
 
     if w is None:
-        weights = 0.001 * np.random.randn(ind, outd).flatten()
+        weights = 0.001 * np.random.randn(ind, outd).ravel()
     else:
         print "Continue with provided weights w."
         weights = w
@@ -137,7 +137,7 @@ def test_cifar(gray, opt, outd, epochs=10, btsz=100,
     params = dict()
     params["x0"] = weights
     if opt is msgd:
-        params["fandprime"] = score_grad_norm
+        params["fandprime"] = score_grad
         params["nos"] = gray.shape[0]
         params["args"] = {"structure": structure}
         params["batch_args"] = {"inputs": gray}
@@ -149,7 +149,7 @@ def test_cifar(gray, opt, outd, epochs=10, btsz=100,
     else:
         # opt from scipy
         params["func"] = score
-        params["fprime"] = grad_norm
+        params["fprime"] = grad
         params["args"] = (structure, gray)
         params["maxfun"] = epochs
         params["m"] = 20

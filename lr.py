@@ -199,11 +199,11 @@ def demo_bayesian(nos, nob, var=0.1, width=0.4):
     import pylab
     pylab.plot(samples, y, 'ro')
     pylab.plot(tests, pred["mean"], 'g')
-    pylab.fill_between(tests, pred["mean"].flatten() + np.sqrt(pred["var"]), 
-            pred["mean"].flatten() - np.sqrt(pred["var"]), alpha=0.1, color='g')
+    pylab.fill_between(tests, pred["mean"].ravel() + np.sqrt(pred["var"]), 
+            pred["mean"].ravel() - np.sqrt(pred["var"]), alpha=0.1, color='g')
     pylab.plot(tests, onpred["mean"], 'y')
-    pylab.fill_between(tests, onpred["mean"].flatten() + np.sqrt(onpred["var"]), 
-            onpred["mean"].flatten() - np.sqrt(onpred["var"]), alpha=0.1, color='y')
+    pylab.fill_between(tests, onpred["mean"].ravel() + np.sqrt(onpred["var"]), 
+            onpred["mean"].ravel() - np.sqrt(onpred["var"]), alpha=0.1, color='y')
     pylab.plot(tests, np.sin(2*np.pi*tests), 'r', lw=2)
 
 
