@@ -18,6 +18,7 @@ def score(weights, structure, inputs, predict=False,
     A = structure["af"]
     _, idim = inputs.shape
     ih = idim * hdim
+
     hddn = A(np.dot(inputs, weights[:ih].reshape(idim, hdim)) + weights[ih:ih+hdim])
     if error:
         structure["hiddens"] = hddn
@@ -91,3 +92,67 @@ def check_the_grad(nos=1, idim=30, hdim=10, eps=1e-8, verbose=False):
     assert delta < 1e-4, "[nn.py] check_the_grad FAILED. Delta is %f" % delta
     return True
 
+
+def test_cifar(gray, opt, hdim, epochs=10, btsz=100,
+        lr=1e-8, beta=0.9, eta0=2e-6, mu=0.02, lmbd=0.99,
+        w=None):
+    """
+    Train on CIFAR-10 dataset. The data must be provided via _gray_. 
+    If training should continue on some evolved weights, pass in _w_.
+    """
+    from opt import msgd, smd
+    from misc import sigmoid
+    from losses import ssd
+    #
+    n, idim = gray.shape
+    if w is None:
+        if opt is smd:
+            # needs np.complex initialization
+            weights = np.zeros((idim*hdim + idim + hdim), dtype=np.complex)
+            weights[:idim*hdim] = 0.001 * np.random.randn(idim*hdim).ravel()
+        else:
+            weights = np.zeros((idim*hdim + idim + hdim))
+            weights[:idim*hdim] = 0.001 * np.random.randn(idim*hdim)
+    else:
+        print "Continue with provided weights w."
+        weights = w
+
+    structure = dict()
+    structure["af"] = sigmoid
+    structure["score"] = ssd
+    structure["hdim"] = hdim
+    
+    print "Training begins ..."
+    
+    params = dict()
+    params["x0"] = weights
+
+    if opt is msgd or opt is smd:
+        params["fandprime"] = score_grad
+        params["nos"] = gray.shape[0]
+        params["args"] = {"structure": structure}
+        params["batch_args"] = {"inputs": gray}
+        params["epochs"] = epochs
+        params["btsz"] = btsz
+        # msgd
+        params["lr"] = lr 
+        params["beta"] = beta
+        # smd
+        params["eta0"] = eta0
+        params["mu"] = mu
+        params["lmbd"] = lmbd
+
+        params["verbose"] = True
+    else:
+        # opt from scipy
+        params["func"] = score
+        params["fprime"] = grad
+        params["args"] = (structure, gray)
+        params["maxfun"] = epochs
+        params["m"] = 50
+        params["factr"] = 10.
+
+    weights = opt(**params)[0]
+    print "Training done."
+
+    return weights
