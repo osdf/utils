@@ -106,7 +106,7 @@ def check_the_grad(nos=1, ind=30, outd=10, eps=1e-8, verbose=False):
     # with dimension ind each
     ins = np.random.randn(nos, ind)
     
-    weights = 0.001 * np.random.randn(ind, outd).ravel()
+    weights = 0.001 * np.random.randn(ind*outd)
 
     structure = dict()
     structure["l1"] = sqrtsqr
@@ -127,7 +127,7 @@ def test_cifar(gray, opt, dh, lambd, epochs=10, btsz=100,
         w=None):
     """
     Train on CIFAR-10 dataset. The data must be provided via _gray_. 
-    The optimizer is in _opt_ -- several of the following parameters 
+    The optimizer is in _opt_ -- several of the above parameters 
     are related to _opt_. The resulting dimension per sample is _dh_.
     _lambd_ is the weighting of the ICA objective, see comments at the
     top of this file. _epochs_ is the number of passes over the training
