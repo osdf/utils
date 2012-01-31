@@ -1,5 +1,7 @@
 """
 Sparse (tied) AutoEncoder with one hidden layer.
+This implementation only makes sense with hidden bernoulli
+variables.
 """
 
 
@@ -8,11 +10,15 @@ import scipy.linalg as la
 
 
 from misc import Dtable
+from losses import bKL
 
 
-def score(weights, structure, inputs, predict=False, 
+def true_score(weights, structure, inputs, predict=False, 
         error=False, **params):
     """
+    Computes the sparisty penalty according to 'correct' formula,
+    but needs a full pass over training set. Use for numerical gradient
+    check.
     """
     hdim = structure["hdim"]
     A = structure["af"]
@@ -20,22 +26,51 @@ def score(weights, structure, inputs, predict=False,
     ih = idim * hdim
 
     hddn = A(np.dot(inputs, weights[:ih].reshape(idim, hdim)) + weights[ih:ih+hdim])
-    if error:
-        structure["hiddens"] = hddn
     z = np.dot(hddn, weights[:ih].reshape(idim, hdim).T) + weights[ih+hdim:]
-    sc = structure["score"]
+    
     # sparsity penalty is bernoulli KL
     rho_hat = hddn.mean(axis=0)
-    sparsity = np.sum(bKL(structure["rho"], rho_hat)) 
-    sc = structure["score"](z, inputs, predict=predict, error=error)
-    return sc + structure["beta"]*sparsity
+    sparse_pen = structure["beta"] * np.sum(bKL(structure["rho"], rho_hat)) 
+
+    if error:
+        structure["hiddens"] = hddn
+        structure["rho_hat"] = rho_hat
+    
+    return structure["score"](z, inputs, predict=predict, error=error, addon=sparse_pen)
 
 
-def score_grad(weights, structure, inputs, **params):
+def score(weights, structure, inputs, predict=False, 
+        error=False, **params):
+    """
+    Computes the sparisty penalty using exponential weighting.
+    """
+    hdim = structure["hdim"]
+    A = structure["af"]
+    _, idim = inputs.shape
+    ih = idim * hdim
+    rho_hat = structure["rho_hat"]
+    # exponential decay for rho_hat over minibatches
+    lmbd = structure["lmbd"]
+
+    hddn = A(np.dot(inputs, weights[:ih].reshape(idim, hdim)) + weights[ih:ih+hdim])
+    z = np.dot(hddn, weights[:ih].reshape(idim, hdim).T) + weights[ih+hdim:]
+    
+    # sparsity penalty is bernoulli KL
+    # avoid full passes over dataset via exponential decay
+    rho_hat *= lmbd
+    rho_hat += (1 - lmbd) * hddn.mean(axis=0)
+    sparse_pen = structure["beta"] * np.sum(bKL(structure["rho"], rho_hat)) 
+    
+    if error:
+        structure["hiddens"] = hddn
+    return structure["score"](z, inputs, predict=predict, error=error, addon=sparse_pen)
+
+
+def score_grad(weights, structure, inputs, score=true_score, **params):
     """
     """
     hdim = structure["hdim"]
-    _, idim = inputs.shape
+    m, idim = inputs.shape
     ih = idim * hdim
     af = structure["af"]
     g = np.zeros(weights.shape, dtype=weights.dtype)
@@ -47,7 +82,9 @@ def score_grad(weights, structure, inputs, **params):
     # weights are tied
     g[:ih] = np.dot(delta.T, hddn).ravel()
     g[ih+hdim:] = delta.sum(axis=0)
-    dsc_dha = np.dot(delta, weights[:ih].reshape((idim, hdim))) * Dtable[af](hddn)
+    # derivative of sparsity wrt to ha
+    dsparse_dha = -structure["rho"]/structure["rho_hat"] + (1-structure["rho"])/(1-structure["rho_hat"])
+    dsc_dha = Dtable[af](hddn) * (np.dot(delta, weights[:ih].reshape((idim, hdim))) + structure["beta"]*dsparse_dha/m)
     g[:ih] += np.dot(inputs.T, dsc_dha).ravel()
     g[ih:ih+hdim] = dsc_dha.sum(axis=0)
     # clean up structure
@@ -55,21 +92,14 @@ def score_grad(weights, structure, inputs, **params):
     return sc, g
 
 
-def grad(weights, structure, inputs, **params):
+def grad(weights, structure, inputs, score=true_score, **params):
     """
     """
-    _, g = score_grad(weights, structure, inputs, **params)
+    _, g = score_grad(weights, structure, inputs, score=score, **params)
     return g
 
 
-def predict(weights, structure, inputs, **params):
-    """
-    """
-    return score(weights, structure, inputs, predict=True)
-
-
-
-def check_the_grad(nos=1, idim=30, hdim=10, eps=1e-8, verbose=False):
+def check_the_grad(nos=100, idim=30, hdim=10, eps=1e-8, verbose=False):
     """
     Check gradient computation for Neural Networks.
     """
@@ -84,6 +114,8 @@ def check_the_grad(nos=1, idim=30, hdim=10, eps=1e-8, verbose=False):
     structure["hdim"] = hdim
     structure["af"] = sigmoid
     structure["score"] = ssd
+    structure["beta"] = 0.7
+    structure["rho"] = 0.01
     
     weights = np.zeros(idim*hdim + hdim + idim)
     weights[:idim*hdim] = 0.001 * np.random.randn(idim*hdim)
@@ -92,7 +124,7 @@ def check_the_grad(nos=1, idim=30, hdim=10, eps=1e-8, verbose=False):
     args["inputs"] = ins
     args["structure"] = structure
     #
-    delta = check_grad(score, grad, weights, args, eps=eps, verbose=verbose)
+    delta = check_grad(true_score, grad, weights, args, eps=eps, verbose=verbose)
     assert delta < 1e-4, "[nn.py] check_the_grad FAILED. Delta is %f" % delta
     return True
 
@@ -104,6 +136,7 @@ def test_cifar(gray, opt, hdim, epochs=10, btsz=100,
     Train on CIFAR-10 dataset. The data must be provided via _gray_. 
     If training should continue on some evolved weights, pass in _w_.
     """
+    from functools import partial
     from opt import msgd, smd
     from misc import sigmoid
     from losses import ssd
@@ -125,14 +158,18 @@ def test_cifar(gray, opt, hdim, epochs=10, btsz=100,
     structure["af"] = sigmoid
     structure["score"] = ssd
     structure["hdim"] = hdim
-    
+    structure["beta"] = 0.7
+    structure["rho"] = 0.01
+    structure["rho_hat"] = np.zeros(hdim)
+    structure["lmbd"] = 0.9
+
     print "Training begins ..."
-    
+
     params = dict()
     params["x0"] = weights
 
     if opt is msgd or opt is smd:
-        params["fandprime"] = score_grad
+        params["fandprime"] = partial(score_grad, score=score)
         params["nos"] = gray.shape[0]
         params["args"] = {"structure": structure}
         params["batch_args"] = {"inputs": gray}
@@ -150,7 +187,7 @@ def test_cifar(gray, opt, hdim, epochs=10, btsz=100,
     else:
         # opt from scipy
         params["func"] = score
-        params["fprime"] = grad
+        params["fprime"] = partial(grad, score=score)
         params["args"] = (structure, gray)
         params["maxfun"] = epochs
         params["m"] = 50
