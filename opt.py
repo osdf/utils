@@ -19,7 +19,7 @@ def check_grad(f, fprime, x0, args, eps=1e-8, verbose=False):
     perturb = np.zeros(grad.shape)
     # for every component of x:
     if verbose: 
-        print "Number of total function calls: 2*%d=%d"% (x0.shape[0], 2*x0.shape[0])
+        print "Total number of calls to f: 2*%d=%d"% (x0.shape[0], 2*x0.shape[0])
     for i in xrange(x0.shape[0]):
         # don't do inplace change of x0[i] with eps
         perturb[i] = eps
