@@ -9,7 +9,7 @@ import numpy as np
 from misc import logsumexp, sigmoid
 
 
-def xe(z, targets, predict=False, error=False):
+def xe(z, targets, predict=False, error=False, addon=0):
     """
     """
     if predict:
@@ -22,13 +22,14 @@ def xe(z, targets, predict=False, error=False):
         err = np.exp(_xe)
         err[np.arange(n), targets] -= 1
         #score + error
-        return xe, err
+        return xe+addon, err
     else:
-        return xe
+        return xe+addon
 
 
-def ssd(z, targets, weight=0.5, predict=False, error=False):
+def ssd(z, targets, weight=0.5, predict=False, error=False, addon=0):
     """
+    Sum-of-squares difference (ssd).
     """
     if predict:
         return z
@@ -36,13 +37,13 @@ def ssd(z, targets, weight=0.5, predict=False, error=False):
     err = z - targets
     if error:
         # rec. error + first deriv
-        return weight*np.sum(err**2), 2*weight*err
+        return weight*np.sum(err**2)+addon, 2*weight*err
     else:
         # only return reconstruction error 
-        return weight*np.sum(err**2)
+        return weight*np.sum(err**2)+addon
 
 
-def mia(z, targets, predict=False, error=False):
+def mia(z, targets, predict=False, error=False, addon=0):
     """
     Multiple independent attributes.
 
@@ -56,9 +57,9 @@ def mia(z, targets, predict=False, error=False):
     # for every output variable
     bce =  -( targets*bern.log() + (1-targets)*(1-bern).log() ).sum()
     if error:
-        return bce, z-targets
+        return bce+addon, z-targets
     else:
-        return bce
+        return bce+addon
     
 
 def bKL(x, y):
