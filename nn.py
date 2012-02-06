@@ -37,8 +37,9 @@ def score(weights, structure, inputs, targets,
     # no activation function, 
     # everyting will be handeled by score
     z = np.dot(z, weights[idx:idy].reshape(l[0], l[1])) + weights[idy:idy+l[1]]
+    wdecay = structure["lambda"] * np.sum(weights**2)
     sc = structure["score"]
-    return sc(z, targets, predict=predict, error=error)
+    return sc(z, targets, predict=predict, error=error, addon=wdecay)
 
 
 def score_grad(weights, structure, inputs, targets, **params):
@@ -63,7 +64,7 @@ def score_grad(weights, structure, inputs, targets, **params):
     delta = np.dot(delta, weights[-idy:-idx].reshape(l[0], l[1]).T)
     tmp = hiddens[-1]
     for l, A, h in reversed(zip(layers[:-1], activs, hiddens[:-1])):
-        # remember: tmp are values _after_ applying 
+        # tmp are values _after_ applying 
         # activation A to matrix-vector product
         # Compute dE/da (small a -> before A is applied)
         dE_da = delta * (Dtable[A](tmp))
@@ -76,6 +77,7 @@ def score_grad(weights, structure, inputs, targets, **params):
         # backprop delta
         delta = np.dot(delta, weights[-idy:-idx].reshape(l[0], l[1]).T)
         tmp = h
+    g += 2*structure["lambda"]*weights
     # clean up structure
     del structure["hiddens"]
     return sc, g
@@ -140,6 +142,8 @@ def check_the_grad(regression=True, nos=1, ind=30,
         structure["activs"] = [sigmoid]
         structure["score"] = xe
         outs = np.random.random_integers(classes, size=(nos)) - 1
+    # weight decay
+    structure["lambda"] = 0.1
     weights = init_weights(structure)
     cg = dict()
     cg["inputs"] = ins
