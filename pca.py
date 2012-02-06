@@ -49,6 +49,15 @@ def pca(data, covered=None, whiten=False, retained=0):
     return rotated, comp, s
 
 
+def pca_apply(data, comp):
+    """
+    apply components _comp_ (from pca above)
+    to _data_. Data (samples per row) should
+    be accordingly normalized.
+    """
+    return np.dot(data, comp)
+
+
 def zca(data, eps=0.1, **schedule):
     """
     Zero Components Analysis:
