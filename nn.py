@@ -37,7 +37,7 @@ def score(weights, structure, inputs, targets,
     # no activation function, 
     # everyting will be handeled by score
     z = np.dot(z, weights[idx:idy].reshape(l[0], l[1])) + weights[idy:idy+l[1]]
-    wdecay = structure["lambda"] * np.sum(weights**2)
+    wdecay = structure["l2"] * np.sum(weights**2)
     sc = structure["score"]
     return sc(z, targets, predict=predict, error=error, addon=wdecay)
 
@@ -77,7 +77,7 @@ def score_grad(weights, structure, inputs, targets, **params):
         # backprop delta
         delta = np.dot(delta, weights[-idy:-idx].reshape(l[0], l[1]).T)
         tmp = h
-    g += 2*structure["lambda"]*weights
+    g += 2*structure["l2"]*weights
     # clean up structure
     del structure["hiddens"]
     return sc, g
@@ -143,7 +143,7 @@ def check_the_grad(regression=True, nos=1, ind=30,
         structure["score"] = xe
         outs = np.random.random_integers(classes, size=(nos)) - 1
     # weight decay
-    structure["lambda"] = 0.1
+    structure["l2"] = 0.1
     weights = init_weights(structure)
     cg = dict()
     cg["inputs"] = ins
@@ -155,7 +155,7 @@ def check_the_grad(regression=True, nos=1, ind=30,
     return True
 
 
-def demo_mnist(hiddens, opt, epochs=10, 
+def demo_mnist(hiddens, opt, l2=1e-4, epochs=10, 
         lr=0.01, btsz=128, eta0 = 0.0005, 
         mu=0.02, lmbd=0.99, weightvar=0.01, 
         w=None):
@@ -174,6 +174,7 @@ def demo_mnist(hiddens, opt, epochs=10,
     structure["layers"] = [(di, hiddens), (hiddens, dt)]
     structure["activs"] = [np.tanh]
     structure["score"] = xe
+    structure["l2"] = l2
     # get weight initialized
     if w is None:
         weights = init_weights(structure, weightvar)
