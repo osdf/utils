@@ -64,7 +64,6 @@ def predict(weights, structure, inputs, **params):
     return score(weights, structure, inputs, predict=True)
 
 
-
 def check_the_grad(nos=1, idim=30, hdim=10, eps=1e-8, verbose=False):
     """
     Check gradient computation for Neural Networks.

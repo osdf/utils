@@ -33,14 +33,13 @@ def score(weights, structure, inputs,
     z = np.dot(ic, weights.reshape(di, dh).T)
     # smooth l1 penalty cost
     l1 = structure["l1"]
-    pl1 = structure["lmbd"] * np.sum(l1(ic))
+    l1_pnlty = structure["lmbd"] * np.sum(l1(ic))
     if error:
-        sc, err = ssd(z, inputs, predict=False, error=True)
-        sc += pl1
+        sc, err = ssd(z, inputs, predict=False, error=True, addon=l1_pnlty)
         # returns also first derivative of rec. error!
         return sc, err 
     else:
-        sc = ssd(z, inputs, predict=False, error=False) + structure["lmbd"]*pl1
+        sc = ssd(z, inputs, predict=False, error=False, addon=l1_pnlty)
         return sc
 
 
