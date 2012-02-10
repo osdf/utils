@@ -92,26 +92,33 @@ def check_the_grad(nos=1, idim=30, hdim=10, eps=1e-8, verbose=False):
     return True
 
 
-def test_cifar(gray, opt, hdim, epochs=10, btsz=100,
+def test_cifar(cifar, opt, hdim, epochs=10, btsz=100,
         lr=1e-8, beta=0.9, eta0=2e-6, mu=0.02, lmbd=0.99,
         w=None):
     """
-    Train on CIFAR-10 dataset. The data must be provided via _gray_. 
+    Train on CIFAR-10 dataset. The data must be provided via _cifar_.
     If training should continue on some evolved weights, pass in _w_.
     """
     from opt import msgd, smd
     from misc import sigmoid
     from losses import ssd
+    import pca
     #
-    n, idim = gray.shape
+    cifar -= np.atleast_2d(cifar.mean(axis=1)).T
+    cifar /= np.atleast_2d(cifar.std(axis=1)).T
+
+    cifar, comp, s = pca.pca(cifar, covered=0.99, whiten=True)
+
+    n, idim = cifar.shape
+
     if w is None:
         if opt is smd:
             # needs np.complex initialization
             weights = np.zeros((idim*hdim + idim + hdim), dtype=np.complex)
-            weights[:idim*hdim] = 0.001 * np.random.randn(idim*hdim).ravel()
+            weights[:idim*hdim] = 1e-2 * np.random.randn(idim*hdim).ravel()
         else:
             weights = np.zeros((idim*hdim + idim + hdim))
-            weights[:idim*hdim] = 0.001 * np.random.randn(idim*hdim)
+            weights[:idim*hdim] = 1e-2 * np.random.randn(idim*hdim)
     else:
         print "Continue with provided weights w."
         weights = w
@@ -128,9 +135,9 @@ def test_cifar(gray, opt, hdim, epochs=10, btsz=100,
 
     if opt is msgd or opt is smd:
         params["fandprime"] = score_grad
-        params["nos"] = gray.shape[0]
+        params["nos"] = cifar.shape[0]
         params["args"] = {"structure": structure}
-        params["batch_args"] = {"inputs": gray}
+        params["batch_args"] = {"inputs": cifar}
         params["epochs"] = epochs
         params["btsz"] = btsz
         # msgd
@@ -146,7 +153,7 @@ def test_cifar(gray, opt, hdim, epochs=10, btsz=100,
         # opt from scipy
         params["func"] = score
         params["fprime"] = grad
-        params["args"] = (structure, gray)
+        params["args"] = (structure, cifar)
         params["maxfun"] = epochs
         params["m"] = 50
         params["factr"] = 10.
