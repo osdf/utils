@@ -52,11 +52,8 @@ def smd(x0, fandprime, args, batch_args,
     #
     # here: do one pass over dataset with inital x0?
     #
-    start = 0
-    end = 0
-    score = 0
+    start, end, score, passes = 0, 0, 0, 0
     scores = []
-    passes = 0
     while True:
         # prepare batches
         start = end
@@ -105,7 +102,6 @@ def msgd(x0, fandprime, args, batch_args,
     scores = []
     # old direction for momentum
     _d = 0
-    i=0
     while True:
         # prepare batches
         start = end
@@ -118,7 +114,6 @@ def msgd(x0, fandprime, args, batch_args,
         # descent
         x0 -= lr*d
         _d = d
-        i = i+1
         score += sc
         if (end >= nos):
             # start at beginning of data again
