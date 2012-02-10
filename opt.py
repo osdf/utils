@@ -21,18 +21,15 @@ def check_grad(f, fprime, x0, args, eps=1e-8, verbose=False):
     if verbose: 
         print "Total number of calls to f: 2*%d=%d"% (x0.shape[0], 2*x0.shape[0])
     for i in xrange(x0.shape[0]):
-        # don't do inplace change of x0[i] with eps
         perturb[i] = eps
-        f1 = f(x0 + perturb, **args)
 
+        f1 = f(x0 + perturb, **args)
         f2 = f(x0 - perturb, **args)
 
-        # second order approximation
         ngrad[i] = (f1 - f2)/(2*eps)
 
-        # undo previous change
+        # undo eps 
         perturb[i] = 0.
-
     norm_diff = np.sqrt(np.sum((grad-ngrad)**2))
     norm_sum = np.sqrt(np.sum((grad+ngrad)**2))
     if verbose:
@@ -104,25 +101,24 @@ def msgd(x0, fandprime, args, batch_args,
     """
     Minibatch stochastic gradient descent.
     """
-    lr /= btsz
-    #
-    start = 0
-    end = 0
-    score = 0
+    start, end, score, passes = 0, 0, 0, 0
     scores = []
-    passes = 0
+    # old direction for momentum
     _d = 0
+    i=0
     while True:
         # prepare batches
         start = end
         end = start + btsz
         for item in batch_args:
             args[item] = batch_args[item][start:end]
-        # do the work
+        # gradient + old direction is new direction
         sc, d = fandprime(x0, **args)
         d += beta * _d
-        _d = d
+        # descent
         x0 -= lr*d
+        _d = d
+        i = i+1
         score += sc
         if (end >= nos):
             # start at beginning of data again
@@ -134,7 +130,6 @@ def msgd(x0, fandprime, args, batch_args,
             passes += 1
             if passes >= epochs:
                 break
-    lr *= btsz
     return x0, scores
 
 
