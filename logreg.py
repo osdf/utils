@@ -93,7 +93,8 @@ def demo_mnist(opt, epochs=10, btsz=100,
             weights = np.zeros((di*dt+dt), dtype=np.complex)
             weights[:] = 0.001 * np.random.randn(di*dt+dt)
         else:
-            weights = 0.001 * np.random.randn(di*dt+dt)
+            weights = np.zeros((di*dt+dt), dtype=np.complex)
+            weights = 0.* np.random.randn(di*dt+dt)
         weights[-dt:] = 0.
     else:
         print "Continue with provided weights w."
@@ -110,6 +111,7 @@ def demo_mnist(opt, epochs=10, btsz=100,
         params["epochs"] = epochs
         params["btsz"] = btsz
         # msgd
+        params["beta"] = beta
         params["lr"] = lr 
         # smd
         params["eta0"] = eta0

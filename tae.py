@@ -96,14 +96,15 @@ def test_cifar(cifar, opt, hdim, epochs=10, btsz=100,
         lr=1e-8, beta=0.9, eta0=2e-6, mu=0.02, lmbd=0.99,
         w=None):
     """
-    Train on CIFAR-10 dataset. The data must be provided via _cifar_.
+    (Supposedly train in an unsupervised way on CIFAR-10 dataset). 
+    The data must be provided via _cifar_.
     If training should continue on some evolved weights, pass in _w_.
     """
     from opt import msgd, smd
     from misc import sigmoid
     from losses import ssd
     import pca
-    #
+
     cifar -= np.atleast_2d(cifar.mean(axis=1)).T
     cifar /= np.atleast_2d(cifar.std(axis=1)).T
 

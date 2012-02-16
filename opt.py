@@ -14,12 +14,14 @@ def check_grad(f, fprime, x0, args, eps=1e-8, verbose=False):
     """
     # computed gradient at x0
     grad = fprime(x0, **args)
+    
     # space for the numeric gradient
     ngrad = np.zeros(grad.shape)
     perturb = np.zeros(grad.shape)
-    # for every component of x:
+    
     if verbose: 
         print "Total number of calls to f: 2*%d=%d"% (x0.shape[0], 2*x0.shape[0])
+    
     for i in xrange(x0.shape[0]):
         perturb[i] = eps
 
@@ -30,11 +32,14 @@ def check_grad(f, fprime, x0, args, eps=1e-8, verbose=False):
 
         # undo eps 
         perturb[i] = 0.
+    
     norm_diff = np.sqrt(np.sum((grad-ngrad)**2))
     norm_sum = np.sqrt(np.sum((grad+ngrad)**2))
+    
     if verbose:
         print "Norm difference:", norm_diff
         print "Relative norm difference:", norm_diff/norm_sum
+    
     return norm_diff/norm_sum
 
 
@@ -119,7 +124,7 @@ def msgd(x0, fandprime, args, batch_args,
             # start at beginning of data again
             end = 0
             if verbose:
-                print "Epoch %d, Score %f" % (passes, score)
+                print "Epoch %d, Score %f, lr %f, beta %f" % (passes, score, lr, beta)
             scores.append(score)
             score = 0
             passes += 1
