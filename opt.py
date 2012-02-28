@@ -115,9 +115,9 @@ def msgd(x0, fandprime, args, batch_args,
             args[item] = batch_args[item][start:end]
         # gradient + old direction is new direction
         sc, d = fandprime(x0, **args)
-        d += beta * _d
+        d = -lr*d + beta * _d
         # descent
-        x0 -= lr*d
+        x0 += d
         _d = d
         score += sc
         if (end >= nos):
@@ -131,125 +131,6 @@ def msgd(x0, fandprime, args, batch_args,
             if passes >= epochs:
                 break
     return x0, scores
-
-
-#def olbfgs(x0, fandprime, args, batch_args,
-#        eta_0, m, tau, epochs, nos, btsz, verbose=False,
-#        **params):
-#    """
-#    This is not kosher at all, please fix!
-#    """
-#    SMALL = 10**-10
-#    S = np.zeros((m, x0.shape[0]))
-#    Y = np.zeros((m, x0.shape[0]))
-#    rho = np.zeros(m)
-#    delta = np.zeros(m)
-#    alpha = np.zeros(m)
-#    index = -1
-#    s = 0
-#    y = 0
-#    iters = 0
-#    start = 0
-#    end = 0
-#    score = 0
-#    scores = []
-#    passes = 0
-#    while True:
-#        # get batch
-#        start = end
-#        end = start+btsz
-#        for item in batch_args:
-#            args[item] = batch_args[item][start:end]
-#        score, grad = fandprime(x0, **args)
-#        # compute update direction
-#        if iters > 0:
-#            eta = eta_0 * tau/(tau + iters)
-#            #print 'eta', eta
-#            p = -eta * grad
-#            sy = np.dot(s, y)
-#            if sy < 10**-8:
-#                print "Skipping update", iters, sy, start
-#                index = (index - 1)%m
-#                cap = min(m, iters-1)
-#            else:
-#                S[index] = s
-#                Y[index] = y
-#                yy = np.dot(y, y) 
-#                #print 'sx, yy', sy, yy
-#                rho[index] = 1./sy
-#                delta[index] = sy/yy
-#                #
-#                cap = min(m, iters)
-#            #
-#            alpha *= 0
-#            #
-#            i = index
-#            weight = 0
-#            for _t in xrange(cap):
-#                alpha[i] = rho[i] * np.dot(S[i], p)
-#                #print 'rho, alpha', rho[i], alpha[i]
-#                p -= alpha[i] * Y[i]
-#                # weight update
-#                weight += delta[i]
-#                #print "-", i
-#                i = (i-1)%m
-#            #print "done with -", weight/cap
-#            #
-#            p *= (weight/cap)
-#            #
-#            counter = 0
-#            i = (index - (cap-1)) % m
-#            for _t in xrange(cap):
-#                beta = rho[i] * np.dot(Y[i], p)
-#                p += (alpha[i] - beta) * S[i]
-#                #print "+", i
-#                i = (i+1)%m
-#            #print "done with + "
-#            s = p
-#        else:
-#            s = -SMALL * grad
-#        #
-#        x0 += s
-#        #
-#        _sc, y = fandprime(x0, **args)
-#        y -= grad
-#        #
-#        iters += 1
-#        index = (index + 1)%m
-#        del grad
-#        #print score
-#        if (end >= nos):
-#            # start at beginning of data again
-#            end = 0
-#            if verbose:
-#                print passes, score
-#            scores.append(score)
-#            score = 0
-#            passes += 1
-#            if passes >= epochs:
-#                break
-#    return x0, scores
-#
-
-#def lbfgs(x0, fandprime, corrections):
-#    """
-#    """
-#    g = ...
-#    t = 0
-#    for iters in xrange(maxiters):
-#        if iters == 1:
-#            # Start with steepes desecent direction
-#            d = -g
-#        else:
-#            lbfgsUpdate(y, s, corrections, dirs, steps, Hdiag, idx)
-#            d = lbfgsDir(-g, dirs, steps, Hdiag, idx) 
-#        g_old = g
-#        #
-#        check_progress
-#        # Initial guess for steprate
-#        t = 1
-#        f_old = f
-#        gtd_old = gtd
 
 
 def lbfgsb(func, x0, fprime=None, args=(), approx_grad=0, 
