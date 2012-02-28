@@ -155,8 +155,8 @@ def check_the_grad(regression=True, nos=1, ind=30,
     return True
 
 
-def demo_mnist(hiddens, opt, l2=1e-4, epochs=10, 
-        lr=0.01, btsz=128, eta0 = 0.0005, 
+def demo_mnist(hiddens, opt, l2=1e-6, epochs=10, 
+        lr=1e-4, beta=0., btsz=128, eta0 = 0.0005, 
         mu=0.02, lmbd=0.99, weightvar=0.01, 
         w=None):
     """
@@ -197,7 +197,8 @@ def demo_mnist(hiddens, opt, l2=1e-4, epochs=10,
         params["btsz"] = btsz
         params["verbose"] = True
         # for msgd
-        params["lr"] = lr 
+        params["lr"] = lr
+        params["beta"] = beta
         # for smd
         params["eta0"] = eta0
         params["mu"] = mu
