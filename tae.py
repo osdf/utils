@@ -71,14 +71,14 @@ def check_the_grad(nos=1, idim=30, hdim=10, eps=1e-8, verbose=False):
     #
     from opt import check_grad
     from misc import sigmoid
-    from losses import ssd
+    from losses import ssd, mia
     # number of input samples (nos)
     # with dimension ind each
-    ins = np.random.randn(nos, idim)
+    ins = np.random.rand(nos, idim)
     structure = dict()
     structure["hdim"] = hdim
     structure["af"] = sigmoid
-    structure["score"] = ssd
+    structure["score"] = mia
     
     weights = np.zeros(idim*hdim + hdim + idim)
     weights[:idim*hdim] = 0.001 * np.random.randn(idim*hdim)
@@ -88,7 +88,7 @@ def check_the_grad(nos=1, idim=30, hdim=10, eps=1e-8, verbose=False):
     args["structure"] = structure
     #
     delta = check_grad(score, grad, weights, args, eps=eps, verbose=verbose)
-    assert delta < 1e-4, "[nn.py] check_the_grad FAILED. Delta is %f" % delta
+    assert delta < 1e-4, "[tae.py] check_the_grad FAILED. Delta is %f" % delta
     return True
 
 

@@ -8,10 +8,24 @@ import scipy.linalg as la
 
 
 from misc import logsumexp
-from losses import xe
+from losses import xe, mia
 
 
-def score(weights, inputs, targets=None, 
+def score_mia(weights, inputs, targets=None,
+        predict=False, error=False, **params):
+    """
+    Score for multiple independent (output) attributes.
+
+    This allows 'standard' logistic regression (one output,
+    two classes).
+    """
+    _, di = inputs.shape
+    dt = weights.shape[0]/(di + 1)
+    z = np.dot(inputs, weights[:di*dt].reshape(di, dt)) + weights[di*dt:]
+    return mia(z, targets=targets, predict=predict, error=error)
+
+
+def score_xe(weights, inputs, targets=None, 
         predict=False, error=False, **params):
     """
     """
@@ -27,7 +41,7 @@ def predict(weights, inputs, **params):
     return score(weights, inputs, targets=None, predict=True)
 
 
-def score_grad(weights, inputs, targets, **params):
+def score_grad_xe(weights, inputs, targets, **params):
     """
     Compute the (batch) gradient at _weights_
     for training set _inputs_/_targets_.
@@ -36,30 +50,61 @@ def score_grad(weights, inputs, targets, **params):
     _, di = inputs.shape
     dt = weights.shape[0]/(di + 1)
     g = np.zeros(weights.shape, dtype=weights.dtype)
-    xe, error = score(weights, inputs, targets, predict=False, error=True)
+    xe, error = score_xe(weights, inputs, targets, predict=False, error=True)
     # one signal per input sample
     g[:di*dt] = np.dot(inputs.T, error).ravel()
     g[di*dt:] = error.sum(axis=0)
     return xe, g
 
 
-def grad(weights, inputs, targets, **params):
+def grad_xe(weights, inputs, targets, **params):
     """
     """
-    _, g = score_grad(weights, inputs, targets, **params)
+    _, g = score_grad_xe(weights, inputs, targets, **params)
     return g
 
 
-def check_the_grad(nos=1, ind=30, classes=5,
+def score_grad_mia(weights, inputs, targets, **params):
+    """
+    Compute the (batch) gradient at _weights_
+    for training set _inputs_/_targets_.
+    _lmbd_ is weight decay factor.
+    """
+    _, di = inputs.shape
+    dt = weights.shape[0]/(di + 1)
+    g = np.zeros(weights.shape, dtype=weights.dtype)
+    xe, error = score_mia(weights, inputs, targets, predict=False, error=True)
+    # one signal per input sample
+    g[:di*dt] = np.dot(inputs.T, error).ravel()
+    g[di*dt:] = error.sum(axis=0)
+    return xe, g
+
+
+def grad_mia(weights, inputs, targets, **params):
+    """
+    """
+    _, g = score_grad_mia(weights, inputs, targets, **params)
+    return g
+
+
+def check_the_grad(nos=1, ind=30, outd=5, bxe=False,
         eps=1e-6, verbose=False):
     """
     """
     from opt import check_grad
     #
-    weights = 0.1 * np.random.randn(ind*classes + classes)
+    weights = 0.1 * np.random.randn(ind*outd + outd)
     ins = np.random.randn(nos, ind)
-    outs = np.random.random_integers(classes, size=(nos)) - 1
-    #
+
+    if bxe:
+        score = score_mia
+        grad = grad_mia
+        outs = 1.*(np.random.rand(nos, outd) > 0.5)
+    else:
+        outs = np.random.random_integers(outd, size=(nos)) - 1
+        score = score_xe
+        grad = grad_xe
+
     cg = dict()
     cg["inputs"] = ins
     cg["targets"] = outs
