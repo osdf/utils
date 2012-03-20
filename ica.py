@@ -76,13 +76,13 @@ def score_grad_norm(weights, structure, inputs, eps=1e-8, **params):
     n, di = inputs.shape
     dh = weights.shape[0]/di
 
-    w = weights.reshape(ind, hid)
+    w = weights.reshape(di, dh)
     _l2 = sp.sqrt(np.sum(w**2, axis=0) + eps)
     _w = w/_l2
 
     # gradient from ball projection + reshaped
     sc, _g = score_grad(_w.ravel(), structure, inputs, **params)
-    _g = _g.reshape(ind, hid)
+    _g = _g.reshape(di, dh)
 
     g = _g/_l2 - _w * (np.sum(_g * w, axis=0))/(_l2 **2)
     return sc, g.ravel()
