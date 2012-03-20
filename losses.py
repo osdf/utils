@@ -55,9 +55,10 @@ def mia(z, targets, predict=False, error=False, addon=0):
         return bern
     # loss is binary cross entropy
     # for every output variable
-    bce =  -( targets*bern.log() + (1-targets)*(1-bern).log() ).sum()
+    bce = -(targets*np.log(bern) + (1-targets)*np.log(1-bern))
+    bce = np.sum(bce)
     if error:
-        return bce+addon, z-targets
+        return bce+addon, bern-targets
     else:
         return bce+addon
     
