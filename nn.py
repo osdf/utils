@@ -80,6 +80,7 @@ def score_grad(weights, structure, inputs, targets, **params):
     g += 2*structure["l2"]*weights
     # clean up structure
     del structure["hiddens"]
+    n, _ = inputs.shape
     return sc, g
 
 
@@ -115,14 +116,14 @@ def init_weights(structure, var=0.01):
 
 
 def check_the_grad(regression=True, nos=1, ind=30,
-        outd=3, classes=10, eps=1e-8, verbose=False):
+        outd=3, bxe=False, eps=1e-8,verbose=False):
     """
     Check gradient computation for Neural Networks.
     """
     #
     from opt import check_grad
     from misc import sigmoid
-    from losses import xe, ssd
+    from losses import xe, ssd, mia
     # number of input samples (nos)
     # with dimension ind each
     ins = np.random.randn(nos, ind)
@@ -133,15 +134,19 @@ def check_the_grad(regression=True, nos=1, ind=30,
     # Network with one hidden layer
         structure["layers"] = [(ind, 15), (15, outd)]
         structure["activs"] = [np.tanh]
-        structure["score"] = ssd
+        structure["score"] = ssd 
         outs = np.random.randn(nos, outd)
     else:
         # Classification
-        classes = 10
-        structure["layers"] = [(ind, 15), (15, classes)]
+        # _outd_ is interpreted as number of classes
+        structure["layers"] = [(ind, 15), (15, outd)]
         structure["activs"] = [sigmoid]
-        structure["score"] = xe
-        outs = np.random.random_integers(classes, size=(nos)) - 1
+        if bxe:
+            structure["score"] = mia
+            outs = 1.*(np.random.rand(nos, outd) > 0.5)
+        else:
+            structure["score"] = xe
+            outs = np.random.random_integers(outd, size=(nos)) - 1
     # weight decay
     structure["l2"] = 0.1
     weights = init_weights(structure)

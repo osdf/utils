@@ -47,7 +47,7 @@ def score_grad_xe(weights, inputs, targets, **params):
     for training set _inputs_/_targets_.
     _lmbd_ is weight decay factor.
     """
-    _, di = inputs.shape
+    n, di = inputs.shape
     dt = weights.shape[0]/(di + 1)
     g = np.zeros(weights.shape, dtype=weights.dtype)
     xe, error = score_xe(weights, inputs, targets, predict=False, error=True)
