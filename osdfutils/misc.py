@@ -113,31 +113,43 @@ def _scale_01(arr, eps=1e-10):
     return newarr
 
 
-def receptive(array, ind):
-    """
-    Visualize receptive fields.
+def visualize(array, rsz, xtiles=None, fill=0):
+    """Visualize flattened bitmaps.
+
+    _array_ is supposed to be a 1d array that
+    holds the bitmaps (of size _rsz_ each)
+    sequentially. _rsz_ must be a square number.
+
+    Specifiy the number of rows with _xtiles_.
+    If not specified, the layout is approximately
+    square. _fill_ defines the pixel border between
+    patches (default is black (==0)).
     """
     try:
-        import Image as img 
+        import Image as img
     except:
         import PIL as img
-    #
+
     sz = array.size
-    fields = array.reshape(ind, sz/ind).T
-    tiles = int(np.sqrt(sz/ind))
-    notsquare = np.ceil( ((sz/ind) - (tiles**2))/(1.0 * tiles) )
-    shape = int(np.sqrt(ind))
-    pixelsy = (tiles + notsquare) * shape + (tiles + notsquare) + 1
-    pixelsx = tiles * shape + tiles + 1
-    # complete tiling
-    tiling = np.zeros((pixelsy, pixelsx), dtype = 'uint8')
-    for row in xrange(int(tiles + notsquare)):
-        for col in xrange(tiles):
-            if (col+row*tiles) < fields.shape[0]:
-                tile = fields[col + row * tiles].reshape(shape, shape)
-                tile = _scale_01(tile) * 255
-                tiling[shape * row + row + 1:shape * (row+1) + row + 1,\
-                        shape * col + col + 1:shape * (col+1) + col + 1] = tile
+    fields = array.reshape(sz/rsz, rsz)
+    
+    # tiles per axes
+    xtiles = xtiles if xtiles else int(np.sqrt(sz/rsz))
+    ytiles = int(np.ceil(sz/rsz/(1.*xtiles)))
+    shape = int(np.sqrt(rsz))
+    
+    # take care of extra pixels for borders
+    pixelsy = ytiles * shape + ytiles + 1
+    pixelsx = xtiles * shape + xtiles + 1
+    # the tiling has this shape and _fill_ background
+    tiling = fill*np.ones((pixelsy, pixelsx), dtype=np.uint8)
+    
+    for row in xrange(ytiles):
+        for col in xrange(xtiles):
+            if (col+row*xtiles) < fields.shape[0]:
+                tile = fields[col + row * xtiles].reshape(shape, shape)
+                tile = np.asarray(_scale_01(tile) * 255, dtype=np.uint8)
+                tiling[shape * row + row + 1:shape * (row+1) + row + 1, shape * col + col + 1:shape * (col+1) + col + 1] = tile
     return img.fromarray(tiling)
 
 
@@ -146,6 +158,7 @@ def dn(data, eps=1e-8):
     Devisive normalization.
 
     _data_ consists of rows.
+    Operation is *inplace*.
     """
     norm = np.sqrt(np.sum(data**2, axis=1) + eps)
     data /= np.atleast_2d(norm).T

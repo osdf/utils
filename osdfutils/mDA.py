@@ -7,15 +7,15 @@ import numpy as np
 from scipy.linalg import lstsq
 
 
-def mDA(X, p):
+def mDA(X, noise):
     """
     _X_ is the data in 'rows', with an
-    added bias entry (equal to 1)! _p_
-    is the denoising probability.
+    added bias entry (equal to 1)! _noise_
+    is the corruption noise.
     """
     n, d = X.shape
     
-    q = np.ones(1, d) * (1-p)
+    q = np.ones((1, d)) * (1-noise)
     q[0, 0] = 1
     
     S = np.dot(X.T, X)
