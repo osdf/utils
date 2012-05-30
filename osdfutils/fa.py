@@ -11,7 +11,8 @@ SMALL = 1e-8
 
 
 def fa_svd(data, hdims, psi=None, iters=100, eps=1e-1):
-    """Factor Analysis.
+    """Factor Analysis. Algorithm from 'Bayesian Reasoning
+    and Machine Learning' by David Barber, page 428.
 
     _data_ is an n times d datamatrix (i.e.
     samples are per row). It is assumed that
@@ -23,11 +24,11 @@ def fa_svd(data, hdims, psi=None, iters=100, eps=1e-1):
     # some constant terms
     nsqrt = np.sqrt(n)
     llconst = d*np.log(2*np.pi) + hdims
+    var = np.var(data, 0)
 
     if psi is None:
         psi = np.ones(d)
 
-    var = np.var(data, 0)
     loglike = []
     tmp = -np.inf
     for i in xrange(iters):
@@ -35,7 +36,7 @@ def fa_svd(data, hdims, psi=None, iters=100, eps=1e-1):
         Xtilde = data/(sqrt_psi * nsqrt)
         u, s, v = la.svd(Xtilde, full_matrices=False)
         v = v[:hdims]
-        s = s**2
+        s *= s
         # Use 'maximum' here to avoid sqrt problems.
         W = np.sqrt(np.maximum(s[:hdims] - 1, 0))[:, np.newaxis]*v
         W *= sqrt_psi
@@ -66,45 +67,33 @@ def test():
 
     X = np.dot(h, W0) + 0.1 * noise;
     data = X - X.mean(axis=0)
-    W, psi, ll = fa_svd(data , hdims=3, iters=50, eps=1e-1);
+    W, psi, ll = fa_em(data , hdims=3, iters=5000, eps=1e-1);
     print W
     print psi
     print ll
-    print 'Sample Covariance', np.cov(data, rowvar=0, bias=1)
-    print 'Model Covariance', np.dot(W.T, W) + np.diag(psi)
+    print 'Sample Covariance\n', np.cov(data, rowvar=0, bias=1)
+    print 'Model Covariance\n', np.dot(W.T, W) + np.diag(psi)
 
 
-#%function [F,diagPsi,m,loglik]=FA(X,H,varargin)
-#%%FA Factor Analysis
-#%% [F,diagPsi,m,loglik]=FA(X,H,<opts>)
-#%%
-#%% No post rotation of the factors F is applied
-#%%
-#%% Inputs:
-#%% X is the D x N data matrix with each column being a D-dimensional datapoint
-#%% H is the number of factors
-#%% opts.init.diagPsi: initial D dimensional vector describing the diagonal covariance matrix
-#%% opts.init.F : initial Factor loading matrix (ignored if opts.init.diagPsi exists)
-#%% opts.maxit: maximum number of iterations (default is 100)
-#%% opts.tol : change in log likelihood termination criterion (default is 10e-5)
-#%% opts.plotprogress: set to 1 to display log likelihood (default is 0)
-#%%
-#%% Outputs:
-#%% F : factor loading matrix
-#%% diagPsi : diagonal entries of the covariance
-#%% m : mean of the data
-#%% loglik: log likelihood of the data
-#%for loop=1:opts.maxit
-#%    diagSqrtPsi = sqrt(diagPsi)+10e-10;
-#%    Xtilde = diag(1./diagSqrtPsi)*X/sqrt(N);
-#%    [U,LambdaTilde] = svd(Xtilde,0);
-#%    Uh = U(:,1:H); diagLambda=diag(LambdaTilde).^2;
-#%    F = diag(diagSqrtPsi)*Uh*diag(sqrt(max(diagLambda(1:H)-1,0)));
-#%    loglik=-0.5*N*(sum(log(diagLambda(1:H)))+H+sum(diagLambda(H+1:end))+V*log(2*pi)+sum(log(diagPsi)));
-#%    logpV(loop) = loglik;
-#%    if loop>1
-#%        if  logpV(loop) - logpV(loop-1) < opts.tol; break; end
-#%    end
-#%    if opts.plotprogress;    plot(logpV,'-o'); title('Log likelihood'); drawnow; end
-#%    diagPsi=diagS-sum(F.^2,2);
-#%end
+#def fa_em(data, hdims, psi=None, iters=30, eps=1e-1):
+#    """Factor Analysis with EM.
+#    """
+#    import pca
+#    n, d = data.shape
+#    S = np.cov(data, rowvar=0, bias=1)
+#    diagS = np.diag(S)
+#    Ih = np.eye(hdims)
+#    if psi is None:
+#        psi = np.ones(d)
+#    # pca for initialization
+#    _, W, _ = pca.pca(data, retained=hdims)
+#    print W.shape
+#    for i in xrange(iters):
+#        F = W/psi[:, np.newaxis]
+#        G = np.dot(S, F)
+#        tmp = Ih + np.dot(W.T, F)
+#        H = la.solve(tmp.T, G.T).T
+#        tmp = Ih + np.dot(H.T, F)
+#        W = la.solve(tmp.T, G.T).T
+#        psi = diagS - np.diag(np.dot(H, W.T))
+#    return W.T, psi, 0
