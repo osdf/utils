@@ -67,10 +67,24 @@ def logsumexp(array, axis):
     """
     Compute log of (sum of exps) 
     along _axis_ in _array_ in a 
-    stable way.
+    stable way. _array_ is in the log domain.
     """
-    axis_max = np.max(array, axis)[:, np.newaxis]
+    axis_max = np.max(array, axis=axis)[:, np.newaxis]
     return axis_max + np.log(np.sum(np.exp(array-axis_max), axis))[:, np.newaxis]
+
+
+def norm_logprob(logprobs, axis):
+    """Given log probabilities _logprobs_, convert to equivalent
+    discrete probility distribution along _axis_.
+
+    If _axis_ is not 0, caller must transpose accordingly
+    to get original shape of _logprobs_ back.
+    """
+    logprobs = np.rollaxis(logprobs, axis)
+    axis_max = np.max(logprobs, axis=0)
+    tmp = logprobs - axis_max
+    tmp = np.exp(tmp) + np.finfo(np.float).tiny
+    return tmp/np.sum(tmp, axis=0)
 
 
 def one2K(classes):
