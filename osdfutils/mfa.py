@@ -99,9 +99,9 @@ def mfa(X, hdim, C, maxiters, W=None, M=None, psi=None, pi=None, eps=1e-2):
             wzz = np.dot(wz.T, z)
             N_c = posteriors[c].sum()
             wzz[:hdim, :hdim] += N_c * Cov_z[c, :, :]
-            
+
             sol = la.lstsq(wzz, wzX)[0]
-            
+
             M[c, :] = sol[hdim, :]
             W[c, :, :] = sol[:hdim, :]
             psi[c, :] = (np.dot(posteriors[c], X_sq) - np.sum(sol*wzX, axis=0))/N_c
@@ -150,7 +150,7 @@ def sampling(n, W=None, M=None, psi=None, pi=None, c=None, D=None, h=None):
     samples = np.zeros((n, D))
 
     # sample classes
-    classes = np.random.rand(N)
+    classes = np.random.rand(n)
     csum = np.cumsum(pi)
     classes = np.sum(classes[:, np.newaxis] > csum, 1)
 

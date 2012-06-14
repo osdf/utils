@@ -75,25 +75,47 @@ def test():
     print 'Model Covariance\n', np.dot(W.T, W) + np.diag(psi)
 
 
-#def fa_em(data, hdims, psi=None, iters=30, eps=1e-1):
-#    """Factor Analysis with EM.
-#    """
-#    import pca
-#    n, d = data.shape
-#    S = np.cov(data, rowvar=0, bias=1)
-#    diagS = np.diag(S)
-#    Ih = np.eye(hdims)
-#    if psi is None:
-#        psi = np.ones(d)
-#    # pca for initialization
-#    _, W, _ = pca.pca(data, retained=hdims)
-#    print W.shape
-#    for i in xrange(iters):
-#        F = W/psi[:, np.newaxis]
-#        G = np.dot(S, F)
-#        tmp = Ih + np.dot(W.T, F)
-#        H = la.solve(tmp.T, G.T).T
-#        tmp = Ih + np.dot(H.T, F)
-#        W = la.solve(tmp.T, G.T).T
-#        psi = diagS - np.diag(np.dot(H, W.T))
-#    return W.T, psi, 0
+def fa_em(data, hdims, W=None, psi=None, iters=30, eps=1e-1):
+    """Factor Analysis with EM.
+    """
+    n, d = data.shape
+
+    mu = data.mean(axis=0)
+    X = data - mu
+
+
+    if W is None:
+        scale = la.det(np.dot(X.T, X)/n)**(1./d)
+        W = np.random.randn(hdims, d) * np.sqrt(scale/hdims)
+
+    X_sq = X**2
+    diag = np.sum(X_sq, axis=0)/n
+    if psi is None:
+        psi = diag
+
+    Ih = np.eye(hdims)
+    
+    const = -d/2*np.log(2*np.pi)
+    last_ll = -np.inf
+    loglike = []
+    for i in xrange(iters):
+        fac = W/psi
+        cov_z = la.inv(Ih + np.dot(fac, W.T))
+        tmp = np.dot(X, fac.T)
+        E_z = np.dot(tmp, cov_z)
+
+        # loglikelihood estimation
+        inv_cov_x = 1./psi - np.dot(fac.T, np.dot(cov_z, fac))
+        _, _det = np.linalg.slogdet(inv_cov_x)
+        ll = n*(const + 0.5*_det) - 0.5 * np.sum(np.dot(X, inv_cov_x)*X)
+        loglike.append(ll)
+        if ll - last_ll < eps:
+            break
+        last_ll = ll
+
+
+        zX = np.dot(E_z.T, X)
+        E_zz = np.dot(E_z.T, E_z) + n*cov_z
+        W = la.lstsq(E_zz, zX)[0]
+        psi = diag - np.sum(W*zX, axis=0)/n 
+    return W, psi, loglike
