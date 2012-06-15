@@ -30,7 +30,7 @@ def fa_svd(data, hdims, psi=None, iters=100, eps=1e-1):
         psi = np.ones(d)
 
     loglike = []
-    tmp = -np.inf
+    old_ll = -np.inf
     for i in xrange(iters):
         sqrt_psi = np.sqrt(psi) + SMALL
         Xtilde = data/(sqrt_psi * nsqrt)
@@ -40,11 +40,14 @@ def fa_svd(data, hdims, psi=None, iters=100, eps=1e-1):
         # Use 'maximum' here to avoid sqrt problems.
         W = np.sqrt(np.maximum(s[:hdims] - 1, 0))[:, np.newaxis]*v
         W *= sqrt_psi
+        
+        # loglikelihood
         ll = -n/2*(llconst + np.sum(np.log(s[:hdims])) + np.sum(s[hdims:]) + np.sum(np.log(psi)))
         loglike.append(ll)
-        if ll - tmp < eps:
+        if ll - old_ll < eps:
             break
-        tmp = ll
+        old_ll = ll
+
         psi = var - np.sum(W**2, axis=0)
     return W, psi, loglike
 
@@ -67,7 +70,7 @@ def test():
 
     X = np.dot(h, W0) + 0.1 * noise;
     data = X - X.mean(axis=0)
-    W, psi, ll = fa_em(data , hdims=3, iters=5000, eps=1e-1);
+    W, psi, ll = fa_svd(data , hdims=3, iters=5000, eps=1e-1);
     print W
     print psi
     print ll
@@ -77,45 +80,43 @@ def test():
 
 def fa_em(data, hdims, W=None, psi=None, iters=30, eps=1e-1):
     """Factor Analysis with EM.
+
+    Assumes that _data_ is rowwise and already zero-mean!
     """
     n, d = data.shape
 
-    mu = data.mean(axis=0)
-    X = data - mu
-
-
     if W is None:
-        scale = la.det(np.dot(X.T, X)/n)**(1./d)
+        scale = la.det(np.dot(data.T, data)/n)**(1./d)
         W = np.random.randn(hdims, d) * np.sqrt(scale/hdims)
-
-    X_sq = X**2
-    diag = np.sum(X_sq, axis=0)/n
+    
+    _sq = data**2
+    diag = np.sum(_sq, axis=0)/n
     if psi is None:
-        psi = diag
-
+        psi = np.diag(np.cov(data, rowvar=0))
     Ih = np.eye(hdims)
     
-    const = -d/2*np.log(2*np.pi)
+    const = -d/2. * np.log(2*np.pi)
     last_ll = -np.inf
     loglike = []
     for i in xrange(iters):
+        # E-step
         fac = W/psi
         cov_z = la.inv(Ih + np.dot(fac, W.T))
-        tmp = np.dot(X, fac.T)
+        tmp = np.dot(data, fac.T)
         E_z = np.dot(tmp, cov_z)
 
-        # loglikelihood estimation
-        inv_cov_x = 1./psi - np.dot(fac.T, np.dot(cov_z, fac))
+        # loglikelihood 
+        inv_cov_x = np.diag(1./psi) - np.dot(fac.T, np.dot(cov_z, fac))
         _, _det = np.linalg.slogdet(inv_cov_x)
-        ll = n*(const + 0.5*_det) - 0.5 * np.sum(np.dot(X, inv_cov_x)*X)
+        ll = n*(const + 0.5*_det) - 0.5 * np.sum(np.dot(data, inv_cov_x)*data)
         loglike.append(ll)
         if ll - last_ll < eps:
             break
         last_ll = ll
 
-
-        zX = np.dot(E_z.T, X)
+        # M-step
+        zX = np.dot(E_z.T, data)
         E_zz = np.dot(E_z.T, E_z) + n*cov_z
         W = la.lstsq(E_zz, zX)[0]
-        psi = diag - np.sum(W*zX, axis=0)/n 
+        psi = diag - np.sum(W*zX, axis=0)/n
     return W, psi, loglike
