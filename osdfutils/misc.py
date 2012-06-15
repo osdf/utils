@@ -68,10 +68,14 @@ def logsumexp(array, axis):
     Compute log of (sum of exps) 
     along _axis_ in _array_ in a 
     stable way. _array_ is in the log domain.
-    """
-    axis_max = np.max(array, axis=axis)[:, np.newaxis]
-    return axis_max + np.log(np.sum(np.exp(array-axis_max), axis))[:, np.newaxis]
 
+    If _axis_ is not zero, caller must transform
+    result in suitable shape.
+    """
+    arr = np.rollaxis(array, axis)
+    axis_max = np.max(arr, axis=0)
+    return axis_max + np.log(np.sum(np.exp(arr - axis_max), axis=0))
+ 
 
 def norm_logprob(logprobs, axis):
     """Given log probabilities _logprobs_, convert to equivalent
