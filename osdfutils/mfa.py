@@ -13,7 +13,7 @@ import numpy as np
 import scipy.linalg as la
 
 
-from misc import norm_logprob
+from misc import norm_logprob, logsumexp
 
 
 SMALL = 1e-8
@@ -29,7 +29,7 @@ def mfa(X, hdim, C, maxiters, W=None, M=None, psi=None, pi=None, eps=1e-2):
     # pre calculation of some 'constants'.
     N, d = X.shape
     Ih = np.eye(hdim)
-    ll_const = d/2. * np.log(2*np.pi)
+    ll_const = -d/2. * np.log(2*np.pi)
     X_sq = X**2
 
     if W is None:
@@ -46,7 +46,7 @@ def mfa(X, hdim, C, maxiters, W=None, M=None, psi=None, pi=None, eps=1e-2):
     # pre allocating some helper memory
     E_z = np.zeros((C, N, hdim))
     Cov_z = np.zeros((C, hdim, hdim))
-    # stores free energy/loglikelihood
+    # store loglikelihood
     ll = np.zeros((C, N))
 
     last_ll = -np.inf
@@ -59,33 +59,24 @@ def mfa(X, hdim, C, maxiters, W=None, M=None, psi=None, pi=None, eps=1e-2):
             # psi_c is D
             psi_c = psi[c]
             fac = W_c/psi_c
-            # see woodbury identity for why the next line is ok.
+            # see Bishop, p. 93, eq. 2.117 
             cov_z = la.inv(Ih + np.dot(fac, W_c.T))
             tmp = np.dot(X - mu_c, fac.T)
             # latent expectations
-            tmp_E_z = np.dot(tmp, cov_z)
-            # latent _correlations_
+            E_z[c, :, :] = np.dot(tmp, cov_z)
+            # latent _covariance_
             Cov_z[c, :, :] = cov_z
-            # class conditional 'free energies'
-            # (Use Woodbury identity for Precision of X)
-            # the woodbury id. shows that there is some
-            # reuse of computed terms
-            _, _det = np.linalg.slogdet(cov_z)
-            log_det = np.sum(np.log(psi_c)) - _det
-            mu_c_sq = mu_c**2
-            # computing the free energy, but this lower bound
-            # is exact after the E-step (see comment below, too)
-            # (i.e., the name ll_tmp/ll makes sense after all...)
-            ll_tmp = 0.5*np.sum(tmp_E_z * tmp, axis=1)
-            ll_tmp -= 0.5*(np.dot(X_sq, 1./psi_c) + np.dot(mu_c_sq, 1./psi_c) - 2*np.dot(X, mu_c/psi_c))
-            ll[c,:] = ll_tmp - 0.5*log_det - ll_const
-            E_z[c, :, :] = tmp_E_z
-        ll += np.log(pi + np.finfo(np.float).tiny)[:, np.newaxis]
+            # loglikelihood
+            # woodbury identity
+            inv_cov_x = np.diag(1./psi_c) - np.dot(fac.T, np.dot(cov_z, fac))
+            _, _det = np.linalg.slogdet(inv_cov_x)
+            tmp = np.dot(X-mu_c, inv_cov_x)
+            # integrating out latent z's -> again, Bishop, p. 93, eq. 2.115 
+            ll[c, :] = np.log(pi[c]) + ll_const + 0.5 * _det - 0.5 * np.sum(tmp*(X-mu_c), axis=1)
+        # posterior class distribution given data
         posteriors = norm_logprob(ll, axis=0)
-        
-        # after the E-step, the free energy matches the loglikelihood!
-        ll -= np.log(posteriors + np.finfo(np.float).tiny)
-        ll_sum = np.sum(posteriors*ll)
+        # loglikelihood over all datapoints
+        ll_sum = np.sum(logsumexp(ll, axis=0))
         loglike.append(ll_sum)
 
         if ll_sum - last_ll < eps:
