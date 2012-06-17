@@ -50,11 +50,11 @@ def sample(n, mu, cov):
     For plotting these samples, if in 2d:
     pylab.plot(samples[:,0], samples[:,1], 'o')
     """
-    (d, _) = mu.shape
-    samples = np.random.randn(d, n)
+    (_, d) = mu.shape
+    samples = np.random.randn(n, d)
     L = la.cholesky(cov)
-    samples = np.dot(L, samples) + mu
-    return samples.T
+    samples = np.dot(samples, L) + mu
+    return samples
 
 
 def mle(samples):
@@ -65,7 +65,7 @@ def mle(samples):
     i.e. rowwise data vectors. 
     """
     mu = np.mean(samples, axis=0)[:, np.newaxis]
-    cov = np.cov(samples.T)
+    cov = np.cov(samples, rowvar=0)
     return mu, cov
 
 
@@ -77,7 +77,7 @@ def bayes_mean(samples, prec, mu_0=None, prec_0=None):
     _samples_ (the observation noise). 
     _mu_0_ and _cov_0_ define the
     Gaussian prior over mu. If _prec_0_ is None,
-    a noninformative prior (i.e. prior 'precision' = 0I)
+    a noninformative prior (i.e. prior 'precision' = 0*Id)
     is assumed.
 
     _samples_ is the design matrix (rowwise observations).
@@ -88,7 +88,7 @@ def bayes_mean(samples, prec, mu_0=None, prec_0=None):
     posterior precision.
     """
     (n, _) = samples.shape
-    if cov_0 is None:
+    if prec_0 is None:
         post_mean = samples.mean(axis=0)
         post_prec = n * prec 
     else:
