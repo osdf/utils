@@ -223,3 +223,45 @@ def minibatch_k_means(X, k, mbsize, iters):
     inertia_ = distances[xrange(samples), closest_center].sum()
     
     return centers, inertia_
+
+
+def kmeans_np(X, lmbda, M=None):
+    """Non-parametric kmeans.
+
+    _X_ is input data, rowwise. _lmbda_ controls
+    tradeoff between standard kmeans and cluster
+    penalty term.
+
+    See http://www.cs.berkeley.edu/~jordan/papers/kulis-jordan-icml12.pdf
+    """
+    N, d = X.shape
+    if M is None:
+        M = np.mean(X, axis=0).reshape(1, d)
+    k = M.shape[0] - 1 
+    X_sq_sum = np.sum(X**2, axis=1)
+    ind = np.zeros(N)
+    old_ind = ind.copy()
+    tmp = 0
+    iters = 1
+    while True:
+        print "Iteration ", iters
+        iters = iters + 1
+        for i in xrange(N):
+            tmp = -2*np.dot(X[i], M.T) + np.sum(M**2, axis=1)
+            idx = np.argmin(tmp)
+            if (X_sq_sum[i] + tmp[idx]) > lmbda:
+                k = k + 1
+                M = np.append(M, X[i].copy().reshape(1, d), axis=0)
+                ind[i] = k
+                print "Adding cluster for ", i, k
+            else:
+                ind[i] = idx
+        if np.all(old_ind == ind):
+            break
+        # see kmeans above
+        ind_all = csc.csc_matrix((np.ones(N), (ind, xrange(N))), shape=(k+1, N))
+        M = ind_all.dot(X)
+        M /= np.array(ind_all.sum(axis=1))
+        old_ind = ind
+        ind = np.zeros(N)
+    return M, np.array(ind_all.sum(axis=1)).ravel()
