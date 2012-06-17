@@ -132,13 +132,14 @@ def sampling(n, W=None, M=None, psi=None, pi=None, c=None, D=None, h=None):
 
     if pi is None:
         assert c is not None, "pi is None, need number of classes."
-        pi = np.random.rand(pi)
+        pi = np.random.rand(c)
         pi = pi/sum(pi)
 
     # shape of W for every component: hidden x visible,
     # data is rowwise.
     c, h, D = W.shape
     samples = np.zeros((n, D))
+    latents = np.zeros((n, h))
 
     # sample classes
     classes = np.random.rand(n)
@@ -151,10 +152,11 @@ def sampling(n, W=None, M=None, psi=None, pi=None, c=None, D=None, h=None):
         W_c = W[j]
         M_c = M[j]
         psi_c = psi[c]
-        latent = np.random.randn(nc, h)    
+        latent = np.random.randn(nc, h)
+        latents[j_idx, :] = latent
         noise = np.sqrt(psi_c) * np.random.randn(nc, D)
         samples[j_idx, :] = np.dot(latent, W_c) + M_c + noise
-    return samples, latent, classes, W, M, psi, pi
+    return samples, latents, classes, W, M, psi, pi
 
 
 def test():
