@@ -1,14 +1,17 @@
 """Mixture of Gaussians.
 
 (Also runs under 'Gaussian Mixture Model, GMM.')
+
+Also tucked in: kmeans, minibatch kmeans.
 """
 
 
 import numpy as np
 import scipy.linalg as la
-
+from linalg.sparse import csc
 
 from misc import norm_logprob, logsumexp
+from metric import euc_dist
 
 
 LOGSMALL = -4
@@ -26,9 +29,11 @@ def mog(X, C, maxiters, M=None, Cov=None, pi=None, eps=1e-2):
     if M is None:
         tmp = np.random.permutation(N)
         M = X[tmp[:C]].copy()
+
     if Cov is None:
         diag = np.mean(np.diag(np.cov(X, rowvar=0)))*(np.abs(np.random.randn())+1)
         Cov = (diag * np.eye(d)).reshape(1, d, d).repeat(C, axis=0)
+
     if pi is None:
         pi = np.ones(C)/C
 
@@ -89,22 +94,22 @@ def sampling(n, M=None, Cov=None, pi=None, c=None, D=None):
     Because of this case, all parameters are returned, too.
     """
     if M is None:
-        assert c is not None, "M is None, need number of classes."
+        assert c is not None, "M is None, need number of classes c."
         assert D is not None, "M is None, need observation dimension D."
         M = 5*np.random.randn(c, D)
     
     if Cov is None:
-        assert c is not None, "Cov is None, need number of classes."
+        assert c is not None, "Cov is None, need number of classes c."
         assert D is not None, "Cov is None, need observation dimension D"
         # This is not yet a covariance matrix!
         Cov = np.random.randn(c, D, D)
 
     if pi is None:
-        assert c is not None, "pi is None, need number of classes."
+        assert c is not None, "pi is None, need number of classes c."
         pi = np.random.rand(c)
         pi = pi/sum(pi)
 
-    c, D, D = Cov.shape
+    c, D, _ = Cov.shape
     # data is rowwise.
     samples = np.zeros((n, D))
 
@@ -119,20 +124,101 @@ def sampling(n, M=None, Cov=None, pi=None, c=None, D=None):
         tmp = np.random.randn(nc, D)
         M_c = M[j]
         # Covariance construction
-        Cov[j] = (Cov[j] + Cov[j].T + 10*np.eye(D))/10
+        Cov[j] = (Cov[j] + Cov[j].T)/10 + np.eye(D)
         chol = la.cholesky(Cov[j])
         samples[j_idx, :] = np.dot(tmp, chol) + M_c
     return samples, classes, M, Cov, pi
 
 
-def test(n=100):
+def kmeans(X, K, maxiters, M=None, eps=1e-3):
+    """Standard k-means.
+
+    _X_ is data rowwise. _K_ is the number of
+    clusters. _M_ is the set of centers.
+
+    Implementation tries to save some computation cycles.
     """
+    N, d = X.shape
+    if M is None:
+        tmp = np.random.permutation(N)
+        M = X[tmp[:K]].copy()
+
+    costs = []
+    X_sq_sum = np.sum(X**2)
+    for i in xrange(maxiters):
+        # see metric.py, but here: don't need squares from
+        # X, because _minimal_ cost over K is independent from it.
+        cost = -2*np.dot(X, M.T) + np.sum(M**2, axis=1)
+        idx = np.argmin(cost, axis=1)
+        cost = cost[xrange(N), idx]
+        costs.append(X_sq_sum + np.sum(cost))
+
+        if (costs[-2] - costs[-1]) < eps:
+            break
+
+        # Determine new centers
+        # Sparseification from Jakob Verbeek's kmeans code,
+        # http://lear.inrialpes.fr/~verbeek/software.php
+        ind = csc.csc_matrix( (np.ones(N), (idx, xrange(N))), shape=(K, N))
+        M = ind.dot(X)
+        weights = np.array(ind.sum(axis=1))
+        # Handle problem: no points assigned to a cluster
+        zeros_idx = (weights.ravel()==0)
+        zeros = np.sum(zeros_idx)
+        tmp = np.random.permuatation(N)
+        M[zeros_idx, :] = X[tmp[:zeros]].copy()
+        weights[zeros_idx] = 1
+        M /= weights
+    return M, costs
+
+
+def minibatch_k_means(X, k, mbsize, iters):
     """
-    o = np.random.randn()
-    var = 2
-    samples = np.random.randn(n, 2)
-    dists = o + var*np.random.randn(n)
-    thetas = np.random.randn(n) * 2 * np.pi
-    samples[:, 0] = dists * np.cos(thetas)
-    samples[:, 1] = dists * np.sin(thetas)
-    return samples
+    Minibatch kmeans according to
+    Sculley's paper.
+
+    Parameters
+    ----------
+    X: array, shape (n_samples, n_features)
+        The data matrix.
+
+    k: int
+        Number of centers.
+
+    mbsize: int
+        Size of minibatch.
+
+    iters: int
+        Number of iterations.
+
+    Returns
+    -------
+    centers: array, shape (k, n_features)
+        Computed centers.
+
+    inertia: float
+        The value of the inertia criterion 
+        given _centers_.
+    """
+
+    samples = X.shape[0]
+    # Initialize centers
+    seed = np.argsort(np.random.rand(samples))[:k]
+    centers = X[seed]
+    v = np.ones(k)
+    
+    for i in xrange(iters):
+        sample = np.argsort(np.random.rand(samples))[:mbsize]
+        M = X[sample]
+        d = np.argmin(euc_dist(M, centers, squared=True), axis=1)
+        for j in xrange(mbsize):
+            c = d[j]
+            v[c] += 1
+            eta = 1./v[c]
+            centers[c] = (1-eta) * centers[c] + eta * M[j]
+    
+    distances = euc_dist(X, centers, squared=True)
+    closest_center = np.argmin(distances, axis=1)
+    inertia_ = distances[xrange(samples), closest_center].sum()
+    
+    return centers, inertia_
