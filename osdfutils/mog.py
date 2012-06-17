@@ -8,7 +8,7 @@ Also tucked in: kmeans, minibatch kmeans.
 
 import numpy as np
 import scipy.linalg as la
-from linalg.sparse import csc
+from scipy.sparse import csc
 
 from misc import norm_logprob, logsumexp
 from metric import euc_dist
@@ -124,7 +124,7 @@ def sampling(n, M=None, Cov=None, pi=None, c=None, D=None):
         tmp = np.random.randn(nc, D)
         M_c = M[j]
         # Covariance construction
-        Cov[j] = (Cov[j] + Cov[j].T)/10 + np.eye(D)
+        Cov[j] = (Cov[j] + Cov[j].T)/5 + np.eye(D)
         chol = la.cholesky(Cov[j])
         samples[j_idx, :] = np.dot(tmp, chol) + M_c
     return samples, classes, M, Cov, pi
@@ -144,6 +144,7 @@ def kmeans(X, K, maxiters, M=None, eps=1e-3):
         M = X[tmp[:K]].copy()
 
     costs = []
+    last = np.inf
     X_sq_sum = np.sum(X**2)
     for i in xrange(maxiters):
         # see metric.py, but here: don't need squares from
@@ -153,9 +154,9 @@ def kmeans(X, K, maxiters, M=None, eps=1e-3):
         cost = cost[xrange(N), idx]
         costs.append(X_sq_sum + np.sum(cost))
 
-        if (costs[-2] - costs[-1]) < eps:
+        if (last - costs[-1]) < eps:
             break
-
+        last = costs[-1]
         # Determine new centers
         # Sparseification from Jakob Verbeek's kmeans code,
         # http://lear.inrialpes.fr/~verbeek/software.php
@@ -165,7 +166,7 @@ def kmeans(X, K, maxiters, M=None, eps=1e-3):
         # Handle problem: no points assigned to a cluster
         zeros_idx = (weights.ravel()==0)
         zeros = np.sum(zeros_idx)
-        tmp = np.random.permuatation(N)
+        tmp = np.random.permutation(N)
         M[zeros_idx, :] = X[tmp[:zeros]].copy()
         weights[zeros_idx] = 1
         M /= weights
