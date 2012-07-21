@@ -14,7 +14,7 @@ def xe(z, targets, predict=False, error=False, addon=0):
     """
     if predict:
         return np.argmax(z, axis=1)
-    _xe = z - logsumexp(z, axis=1)
+    _xe = z - np.atleast_2d(logsumexp(z, axis=1)).T
     n, _ = _xe.shape
     xe = -np.mean(_xe[np.arange(n), targets])
     if error:
@@ -36,10 +36,10 @@ def ssd(z, targets, weight=0.5, predict=False, error=False, addon=0):
     err = z - targets
     if error:
         # rec. error + first deriv
-        return weight*np.mean(err**2)+addon, 2*weight*err/(n*m)
+        return weight*np.mean(np.sum(err**2, axis=1))+addon, 2*weight*err/n
     else:
         # only return reconstruction error 
-        return weight*np.mean(err**2)+addon
+        return weight*np.mean(np.sum(err**2, axis=1))+addon
 
 
 def mia(z, targets, predict=False, error=False, addon=0):
