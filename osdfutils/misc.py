@@ -5,7 +5,6 @@
 
 import numpy as np
 import scipy as sp
-import scipy.linalg as la
 
 
 def sigmoid(x):
@@ -130,13 +129,13 @@ def _scale_01(arr, eps=1e-10):
     newarr *= 1.0/(newarr.max() + eps)
     return newarr
 
-
-def visualize(array, rsz, xtiles=None, fill=0):
+def visualize(array, rsz, shape_r=None, xtiles=None, fill=0):
     """Visualize flattened bitmaps.
 
     _array_ is supposed to be a 1d array that
     holds the bitmaps (of size _rsz_ each)
-    sequentially. _rsz_ must be a square number.
+    sequentially. _rsz_ must be a square number
+    if _shape_r_ is None.
 
     Specifiy the number of rows with _xtiles_.
     If not specified, the layout is approximately
@@ -147,27 +146,56 @@ def visualize(array, rsz, xtiles=None, fill=0):
         import Image as img
     except:
         import PIL as img
-
     sz = array.size
     fields = array.reshape(sz/rsz, rsz)
     
     # tiles per axes
     xtiles = xtiles if xtiles else int(np.sqrt(sz/rsz))
     ytiles = int(np.ceil(sz/rsz/(1.*xtiles)))
-    shape = int(np.sqrt(rsz))
+    if shape_r is None:
+        shape_r = int(np.sqrt(rsz))
+    shape_c = int(rsz/shape_r)
     
     # take care of extra pixels for borders
-    pixelsy = ytiles * shape + ytiles + 1
-    pixelsx = xtiles * shape + xtiles + 1
+    pixelsy = ytiles * shape_r + ytiles + 1
+    pixelsx = xtiles * shape_c + xtiles + 1
     # the tiling has this shape and _fill_ background
-    tiling = fill*np.ones((pixelsy, pixelsx), dtype=np.uint8)
+    tiling = fill*np.ones((pixelsy, pixelsx), dtype = 'uint8')
     
     for row in xrange(ytiles):
         for col in xrange(xtiles):
             if (col+row*xtiles) < fields.shape[0]:
-                tile = fields[col + row * xtiles].reshape(shape, shape)
-                tile = np.asarray(_scale_01(tile) * 255, dtype=np.uint8)
-                tiling[shape * row + row + 1:shape * (row+1) + row + 1, shape * col + col + 1:shape * (col+1) + col + 1] = tile
+                tile = fields[col + row * xtiles].reshape(shape_r, shape_c)
+                tile = _scale_01(tile) * 255
+                tiling[shape_r * row + row + 1:shape_r * (row+1) + row + 1, shape_c * col + col + 1:shape_c * (col+1) + col + 1] = tile
+    return img.fromarray(tiling)
+
+def hinton(array, sqr_sz = 9):
+    """A hinton diagram without matplotlib.
+    Code definetely has potential for improvement.
+
+    _array_ is the one to visualize. _sqr_sz_ is
+    the length of a square. Bigger -> more details.
+
+    See https://gist.github.com/292018
+    """
+    try:
+        import Image as img
+    except:
+        import PIL as img
+
+    dx, dy = array.shape
+    W = 2**np.ceil(np.log(np.abs(array).max())/np.log(2))
+    # take care of extra pixels for borders
+    pixelsy = dy * sqr_sz + dy + 1
+    pixelsx = dx * sqr_sz + dx + 1
+    tiling = 128*np.ones((pixelsx, pixelsy), dtype = 'uint8')
+    for (x,y), w in np.ndenumerate(array):
+        xpos = x * sqr_sz + x + 1 + int(sqr_sz/2 + 1)
+        ypos = y * sqr_sz + y + 1 + int(sqr_sz/2 + 1)
+        dw = int(np.abs(w)/W * sqr_sz)/2 + 1
+        cw = (w > 0) * 255
+        tiling[xpos - dw:xpos + dw, ypos - dw:ypos+dw] = cw
     return img.fromarray(tiling)
 
 
