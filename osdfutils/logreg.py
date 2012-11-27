@@ -38,7 +38,7 @@ def score_xe(weights, inputs, targets=None,
 def predict(weights, inputs, **params):
     """
     """
-    return score(weights, inputs, targets=None, predict=True)
+    return score_xe(weights, inputs, targets=None, predict=True)
 
 
 def score_grad_xe(weights, inputs, targets, **params):
@@ -138,7 +138,6 @@ def demo_mnist(opt, epochs=10, btsz=100,
             weights = np.zeros((di*dt+dt), dtype=np.complex)
             weights[:] = 0.001 * np.random.randn(di*dt+dt)
         else:
-            weights = np.zeros((di*dt+dt), dtype=np.complex)
             weights = 0.* np.random.randn(di*dt+dt)
         weights[-dt:] = 0.
     else:
@@ -149,7 +148,7 @@ def demo_mnist(opt, epochs=10, btsz=100,
     params = dict()
     params["x0"] = weights
     if opt is msgd or opt is smd:
-        params["fandprime"] = score_grad
+        params["fandprime"] = score_grad_xe
         params["nos"] = inputs.shape[0]
         params["args"] = {}
         params["batch_args"] = {"inputs": inputs, "targets": targets}
@@ -165,8 +164,8 @@ def demo_mnist(opt, epochs=10, btsz=100,
         params["verbose"] = True
     else:
         # opt from scipy
-        params["func"] = score
-        params["fprime"] = grad
+        params["func"] = score_xe
+        params["fprime"] = grad_xe
         params["args"] = (inputs, targets)
         params["maxfun"] = epochs
         params["m"] = 50
