@@ -87,7 +87,7 @@ def smd(x0, fandprime, args, batch_args,
             # start at beginning of data again
             end = 0
             if verbose:
-                print "Epoch %d, Score %f" % (passes, score)
+                print "[smd] Epoch %d, Score %f" % (passes, score)
                 #print np.min(eta), np.max(eta)
             scores.append(score)
             score = 0
@@ -124,7 +124,45 @@ def msgd(x0, fandprime, args, batch_args,
             # start at beginning of data again
             end = 0
             if verbose:
-                print "Epoch %d, Score %f, lr %f, beta %f" % (passes, score, lr, beta)
+                print "[msgd] Epoch %d, Score %f, lr %f, beta %f" % (passes, score, lr, beta)
+            scores.append(score)
+            score = 0
+            passes += 1
+            if passes >= epochs:
+                break
+    return x0, scores
+
+def rmsprop(x0, fandprime, args, batch_args,
+        epochs, nos, lr, btsz, decay = 0.9,
+        verbose=False, **params):
+    """
+    Root mean squared stochastic gradient descent.
+    (also see: Adagrad).
+    """
+    start, end, score, passes = 0, 0, 0, 0
+    scores = []
+    # old direction for momentum
+    # moving average squared gradient
+    masqg = 1.
+    while True:
+        # prepare batches
+        start = end
+        end = start + btsz
+        for item in batch_args:
+            args[item] = batch_args[item][start:end]
+        # sc == score; d == gradient (_d_irection) 
+        sc, d = fandprime(x0, **args)
+        masqg *= decay
+        masqg += (1 - decay) * (d**2)
+        d = -(lr*d)/np.sqrt(masqg + 1e-8)
+        # descent
+        x0 += d
+        score += sc
+        if (end >= nos):
+            # start at beginning of data again
+            end = 0
+            if verbose:
+                print "[rmsprop] Epoch %d, Score %f, lr %f, decay %f" % (passes, score, lr, decay)
             scores.append(score)
             score = 0
             passes += 1

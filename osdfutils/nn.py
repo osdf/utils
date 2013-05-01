@@ -161,14 +161,14 @@ def check_the_grad(regression=True, nos=1, ind=30,
 
 
 def demo_mnist(hiddens, opt, l2=1e-6, epochs=10, 
-        lr=1e-4, beta=0., btsz=128, eta0 = 0.0005, 
+        lr=1e-4, beta=0., decay=0.9,btsz=128, eta0 = 0.0005, 
         mu=0.02, lmbd=0.99, weightvar=0.01, 
         w=None):
     """
     """
     from misc import sigmoid, load_mnist
     from losses import xe, zero_one
-    from opt import msgd, smd 
+    from opt import msgd, smd, rmsprop
     #
     trainset, valset, testset = load_mnist()
     inputs, targets = trainset
@@ -194,7 +194,7 @@ def demo_mnist(hiddens, opt, l2=1e-6, epochs=10,
     params = dict()
     params["x0"] = weights
     params["fandprime"] = score_grad
-    if opt is msgd or opt is smd:
+    if opt is msgd or opt is smd or rmsprop:
         params["nos"] = inputs.shape[0]
         params["args"] = {"structure": structure}
         params["batch_args"] = {"inputs": inputs, "targets": targets}
@@ -204,6 +204,7 @@ def demo_mnist(hiddens, opt, l2=1e-6, epochs=10,
         # for msgd
         params["lr"] = lr
         params["beta"] = beta
+        params["decay"] = decay
         # for smd
         params["eta0"] = eta0
         params["mu"] = mu
