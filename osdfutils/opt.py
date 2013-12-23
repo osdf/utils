@@ -32,11 +32,12 @@ def check_grad(f, fprime, x0, args, eps=1e-8, verbose=False):
 
         # undo eps 
         perturb[i] = 0.
-    
     norm_diff = np.sqrt(np.sum((grad-ngrad)**2))
     norm_sum = np.sqrt(np.sum((grad+ngrad)**2))
     
     if verbose:
+        print "Gradient: ", grad
+        print "Numerical Approximation: ", ngrad
         print "Norm difference:", norm_diff
         print "Relative norm difference:", norm_diff/norm_sum
     

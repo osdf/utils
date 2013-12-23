@@ -7,6 +7,14 @@ import numpy as np
 import scipy as sp
 
 
+def identy(x):
+    return x
+
+
+def Didenty(x):
+    return 1
+
+
 def sigmoid(x):
     return (1 + np.tanh(x/2.))/2.
 
@@ -55,10 +63,11 @@ def Dsqrtsqr(y, eps=1e-8):
 
 
 Dtable = {
-        sigmoid: Dsigmoid,
-        np.tanh: Dtanh,
-        logcosh: np.tanh,
-        sqrtsqr: Dsqrtsqr
+        identy: Didenty
+        ,sigmoid: Dsigmoid
+        ,np.tanh: Dtanh
+        ,logcosh: np.tanh
+        ,sqrtsqr: Dsqrtsqr
         }
 
 
