@@ -201,26 +201,6 @@ def conv_grad(inputs, deltas):
     return grad
 
 
-def check_grad(inpts, filters):
-    """
-    """
-    fmaps, channels, rows, cols = filters.shape
-    holl = np.zeros(filters.shape)
-    eps = 10e-6
-    ngrad = np.zeros(filters.shape)
-
-    for f in range(fmaps):
-        for c in range(channels):
-            for r in range(rows):
-                for cl in range(cols):
-                    holl[f, c, r, cl] = eps
-                    f1 = (conv(inpts, filters+holl) - 1)**2
-                    f2 = (conv(inpts, filters-holl) - 1)**2
-                    ngrad[f, c, r, cl] = (f1.sum() - f2.sum())/(2*eps)
-                    holl[f, c, r, cl] = 0.
-    return ngrad
-
-
 def max_pool(inputs, pool_sz):
     """
     """
