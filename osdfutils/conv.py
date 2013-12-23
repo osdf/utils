@@ -221,28 +221,6 @@ def check_grad(inpts, filters):
     return ngrad
 
 
-def conv_scpy(inputs, filters, res):
-    """
-    """
-    res[:] = scsig.correlate(inputs, filters, mode='valid')
-
-
-def fbcorr(imgs, filters, output):
-    n_imgs, n_rows, n_cols, n_channels = imgs.shape
-    n_filters, height, width, n_ch2 = filters.shape
-
-    for ii in range(n_imgs):
-        for rr in range(n_rows - height + 1):
-            for cc in range(n_cols - width + 1):
-                for hh in xrange(height):
-                    for ww in xrange(width):
-                        for jj in range(n_channels):
-                            for ff in range(n_filters):
-                                imgval = imgs[ii, rr + hh, cc + ww, jj]
-                                filterval = filters[ff, hh, ww, jj]
-                                output[ii, rr, cc, ff] += imgval * filterval
-
-
 def max_pool(inputs, pool_sz):
     """
     """
@@ -276,11 +254,3 @@ def max_pool_bp(delta, idx, pool_sz):
                     cc = rc%mpc
                     delta_down[b, m, r*mpr+rr, c*mpc+cc] = delta[b, m, r, c]
     return delta_down
-
-
-def main():
-    imgs = np.random.randn(10, 64, 64, 3)
-    filt = np.random.randn(6, 5, 5, 3)
-    output = np.zeros((10, 60, 60, 6))
-
-    fbcorr(imgs, filt, output)
