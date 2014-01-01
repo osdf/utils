@@ -1,3 +1,8 @@
+"""
+A standard Convolutional Neural Network in pure python.
+"""
+
+
 import numpy as np
 import scipy.signal as scsig
 
@@ -17,9 +22,8 @@ def score(weights, structure, inputs, targets,
     max_idx = []
     
     if error:
-        hiddens = []
+        hiddens = [z]
         maxima = []
-        hiddens.append(z)
 
     idx = 0
     for l, p, A in zip(layers, pools, activs):
