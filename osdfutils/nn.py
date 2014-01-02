@@ -50,11 +50,11 @@ def score_grad(weights, structure, inputs, targets, **params):
     layers = structure["layers"]
     activs = structure["activs"]
     hiddens = structure["hiddens"]
-    
+
     tmp = hiddens[-1]
     idy = 0
     idx = 0
-    print len(hiddens)
+
     # Filling up gradient from _top_ layer downwards!
     for l, A, h in reversed(zip(layers, activs, hiddens[:-1])):
         # tmp are values _after_ applying 
@@ -85,7 +85,6 @@ def score_grad(weights, structure, inputs, targets, **params):
 def grad(weights, structure, inputs, targets, **params):
     """
     """
-    print "ADFADSF"
     _, g = score_grad(weights, structure, inputs, targets, **params)
     return g
 
@@ -120,8 +119,7 @@ def check_the_grad(regression=True, nos=1, ind=30,
     Check gradient computation for Neural Networks.
     """
     #
-    from opt import check_grad
-    from misc import sigmoid, identy
+    from misc import sigmoid, identy, check_grad
     from losses import xe, ssd, mia
     # number of input samples (nos)
     # with dimension ind each
@@ -168,7 +166,7 @@ def demo_mnist(hiddens, opt, l2=1e-6, epochs=10,
         w=None):
     """
     """
-    from misc import sigmoid, load_mnist
+    from misc import sigmoid, identy, load_mnist
     from losses import xe, zero_one
     from opt import msgd, smd, rmsprop
     #
@@ -179,7 +177,7 @@ def demo_mnist(hiddens, opt, l2=1e-6, epochs=10,
     dt = np.max(targets) + 1
     structure = {}
     structure["layers"] = [(di, hiddens), (hiddens, dt)]
-    structure["activs"] = [np.tanh]
+    structure["activs"] = [np.tanh, identy]
     structure["score"] = xe
     structure["l2"] = l2
     # get weight initialized
@@ -196,7 +194,7 @@ def demo_mnist(hiddens, opt, l2=1e-6, epochs=10,
     params = dict()
     params["x0"] = weights
     params["fandprime"] = score_grad
-    if opt is msgd or opt is smd or rmsprop:
+    if opt is msgd or opt is smd or opt is rmsprop:
         params["nos"] = inputs.shape[0]
         params["args"] = {"structure": structure}
         params["batch_args"] = {"inputs": inputs, "targets": targets}
