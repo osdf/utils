@@ -31,7 +31,6 @@ def score(weights, structure, inputs, targets,
             hiddens.append(z)
     
     if error:
-        hiddens.append(z)
         structure["hiddens"] = hiddens
     
     wdecay = structure["l2"] * np.sum(weights**2)
@@ -55,6 +54,7 @@ def score_grad(weights, structure, inputs, targets, **params):
     tmp = hiddens[-1]
     idy = 0
     idx = 0
+    print len(hiddens)
     # Filling up gradient from _top_ layer downwards!
     for l, A, h in reversed(zip(layers, activs, hiddens[:-1])):
         # tmp are values _after_ applying 
@@ -85,6 +85,7 @@ def score_grad(weights, structure, inputs, targets, **params):
 def grad(weights, structure, inputs, targets, **params):
     """
     """
+    print "ADFADSF"
     _, g = score_grad(weights, structure, inputs, targets, **params)
     return g
 
