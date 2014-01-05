@@ -1,3 +1,8 @@
+"""
+Convolutional Neural Network for 3D data in pure python.
+"""
+
+
 import numpy as np
 import scipy.signal as scsig
 
@@ -116,7 +121,7 @@ def init_weights(structure, var=0.01):
 def check_the_grad(eps=1e-8, verbose=False):
     """
     """
-    from opt import check_grad
+    from misc import check_grad
     from losses import ssd
 
     structure = {}
@@ -134,7 +139,6 @@ def check_the_grad(eps=1e-8, verbose=False):
     cg["targets"] = trgts
     cg["structure"] = structure
     #
-    #grad(weights, structure, inpts, trgts)
     delta = check_grad(score, grad, weights, cg, eps=eps, verbose=verbose)
 
 
