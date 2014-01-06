@@ -119,7 +119,7 @@ def init_weights(structure, var=0.01):
 def check_the_grad(eps=1e-6, verbose=False):
     """
     """
-    from opt import check_grad
+    from misc import check_grad
     from losses import ssd
 
     structure = {}
