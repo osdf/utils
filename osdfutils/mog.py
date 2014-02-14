@@ -225,6 +225,35 @@ def minibatch_k_means(X, k, mbsize, iters):
     return centers, inertia_
 
 
+def skmeans(X, k, epochs, M=None, btsz=100, lr=0.001):
+    """
+    Synchronous k-Means. From
+    "Learning to encode motion using spatio-temporal synchrony",
+    by Konda, Memisevic and Michalski.
+    """
+    n, d = X.shape
+    if M is None:
+        M = np.random.standard_normal((d, D))
+        Mlength = np.sqrt(np.sum(M**2, axis=0) + 1e-6)
+        M /= Mlength
+    print "Starting skmeans."
+    for ep in xrange(epochs):
+        # Cost is not yet computed here -> TODO 
+        _cost = 0
+        for i in xrange(0, n, btsz):
+            _x = X[i:i+btsz]
+            sprod = np.dot(_x, M)
+            cost = sprod**2
+            idx = np.argmax(cost, axis=1)
+            mx[xrange(_n), idx] = sprod[xrange(_n), idx]
+            mx_sq[xrange(_n), idx] = cost[xrange(_n), idx]
+            mx_sq_sum = mx_sq.sum(axis=0)
+            M += lr*(np.dot(X.T, mx) - mx_sq_sum*M)
+            Mlength = np.sqrt(np.sum(M**2, axis=0) + 1e-6)
+            M /= Mlength
+        print "Epoch: ", ep, "; Cost: ", _cost
+    return M, cost, 0
+
 def kmeans_np(X, lmbda, M=None):
     """Non-parametric kmeans.
 
