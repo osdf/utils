@@ -6,6 +6,7 @@ Some basic optimization facilities.
 import numpy as np
 import scipy.linalg as la
 from scipy.optimize import fmin_l_bfgs_b, fmin_tnc
+import sys
 
 
 def smd(x0, fandprime, args, batch_args,
@@ -15,7 +16,7 @@ def smd(x0, fandprime, args, batch_args,
     """
     Stochastic Meta Descent.
     """
-    ii = 1e-150j
+    ii = 1j*sys.float_info.min
     p = np.size(x0)
     v = np.zeros(p)
     eta = eta0 * np.ones(p)
@@ -42,7 +43,7 @@ def smd(x0, fandprime, args, batch_args,
         x0 -= eta * np.real(g)
         #
         v *= lmbd
-        v += eta*(np.real(g) - lmbd*np.imag(g)*1e150)
+        v += eta*(np.real(g) - lmbd*np.imag(g)/sys.float_info.min)
         score += sc
         # do some logging of error, eta, v, x0, g??
         if (end >= nos):
