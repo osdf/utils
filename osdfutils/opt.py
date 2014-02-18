@@ -6,41 +6,7 @@ Some basic optimization facilities.
 import numpy as np
 import scipy.linalg as la
 from scipy.optimize import fmin_l_bfgs_b, fmin_tnc
-
-
-def check_grad(f, fprime, x0, args, eps=1e-8, verbose=False):
-    """
-    Numerically check the gradient, using 
-    """
-    # computed gradient at x0
-    grad = fprime(x0, **args)
-    
-    # space for the numeric gradient
-    ngrad = np.zeros(grad.shape)
-    perturb = np.zeros(grad.shape)
-    
-    if verbose: 
-        print "Total number of calls to f: 2*%d=%d"% (x0.shape[0], 2*x0.shape[0])
-    
-    for i in xrange(x0.shape[0]):
-        perturb[i] = eps
-
-        f1 = f(x0 + perturb, **args)
-        f2 = f(x0 - perturb, **args)
-
-        ngrad[i] = (f1 - f2)/(2*eps)
-
-        # undo eps 
-        perturb[i] = 0.
-    
-    norm_diff = np.sqrt(np.sum((grad-ngrad)**2))
-    norm_sum = np.sqrt(np.sum((grad+ngrad)**2))
-    
-    if verbose:
-        print "Norm difference:", norm_diff
-        print "Relative norm difference:", norm_diff/norm_sum
-    
-    return norm_diff/norm_sum
+import sys
 
 
 def smd(x0, fandprime, args, batch_args,
@@ -50,7 +16,7 @@ def smd(x0, fandprime, args, batch_args,
     """
     Stochastic Meta Descent.
     """
-    ii = 1e-150j
+    ii = 1j*sys.float_info.min
     p = np.size(x0)
     v = np.zeros(p)
     eta = eta0 * np.ones(p)
@@ -77,7 +43,7 @@ def smd(x0, fandprime, args, batch_args,
         x0 -= eta * np.real(g)
         #
         v *= lmbd
-        v += eta*(np.real(g) - lmbd*np.imag(g)*1e150)
+        v += eta*(np.real(g) - lmbd*np.imag(g)/sys.float_info.min)
         score += sc
         # do some logging of error, eta, v, x0, g??
         if (end >= nos):

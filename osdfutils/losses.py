@@ -71,6 +71,26 @@ def bKL(x, y):
     return x*np.log(x/y) + (1-x)*np.log((1-x)/(1-y))
 
 
+def drLim(z, targets, p_margin, n_margin=10, predict=False, error=False, addon=0):
+    """
+    Dimensionality Reduction by Learning an Invariant Metric.
+    """
+    pairs, d = z.shape
+    z = z.reshape(pairs//2, 2*d)
+    dist = z[:, :d] - z[:, d:]
+    dist *= dist
+    dist = np.sqrt(dist.sum(axis=1), + eps)
+    dist = np.repeat(dist, 2, axis=0)
+    z = z.reshape(pairs, d)
+    z[1::2] *= -1
+    n_margin_active = 1.0*(dist < n_margin)
+    err = targets*z + (1-targets)*n_margin_active*z
+    if error:
+        return 0 ,err
+    else:
+        return 0
+
+
 def zero_one(z, targets):
     """
     """

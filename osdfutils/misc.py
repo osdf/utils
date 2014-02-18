@@ -7,6 +7,14 @@ import numpy as np
 import scipy as sp
 
 
+def identy(x):
+    return x
+
+
+def Didenty(x):
+    return 1
+
+
 def sigmoid(x):
     return (1 + np.tanh(x/2.))/2.
 
@@ -55,10 +63,11 @@ def Dsqrtsqr(y, eps=1e-8):
 
 
 Dtable = {
-        sigmoid: Dsigmoid,
-        np.tanh: Dtanh,
-        logcosh: np.tanh,
-        sqrtsqr: Dsqrtsqr
+        identy: Didenty
+        ,sigmoid: Dsigmoid
+        ,np.tanh: Dtanh
+        ,logcosh: np.tanh
+        ,sqrtsqr: Dsqrtsqr
         }
 
 
@@ -223,4 +232,39 @@ def cn(data):
     std = data.std(axis=0) + 1e-8
     data -= mu
     data /= std
-    return 
+    return
+
+
+def check_grad(f, fprime, x0, args, eps=1e-8, verbose=False):
+    """
+    Numerically check the gradient, using
+    """
+    # computed gradient at x0
+    grad = fprime(x0, **args)
+
+    # space for the numeric gradient
+    ngrad = np.zeros(grad.shape)
+    perturb = np.zeros(grad.shape)
+
+    if verbose:
+        print "Total number of calls to f: 2*%d=%d"% (x0.shape[0], 2*x0.shape[0])
+    for i in xrange(x0.shape[0]):
+        perturb[i] = eps
+
+        f1 = f(x0 + perturb, **args)
+        f2 = f(x0 - perturb, **args)
+
+        ngrad[i] = (f1 - f2)/(2*eps)
+
+        # undo eps
+        perturb[i] = 0.
+    norm_diff = np.sqrt(np.sum((grad-ngrad)**2))
+    norm_sum = np.sqrt(np.sum((grad+ngrad)**2))
+
+    if verbose:
+        print "Gradient: ", grad
+        print "Numerical Approximation: ", ngrad
+        print "Norm difference:", norm_diff
+        print "Relative norm difference:", norm_diff/norm_sum
+
+    return norm_diff/norm_sum
