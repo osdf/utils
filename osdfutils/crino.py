@@ -46,3 +46,23 @@ def zbae(activ='TRec', theta):
     rec = T.sum(x - T.dot(h, W.T), axis=1)
     cost = T.mean(rec)
     grads = T.grad(cost, W)
+
+
+def rotations(samples, dims, dist=1., maxangle=30.):
+    """
+    Rotated dots for learning log-polar filters.
+    """
+    import scipy.ndimage
+    tmps= numpy.random.randn(samples,4*dims*dims)
+    ins = numpy.zeros((samples, dims*dims))
+    outs = numpy.zeros((samples, dims*dims))
+    for j, img in enumerate(tmps):
+        _angle = numpy.random.vonmises(0.0, dist)/numpy.pi * maxangle
+        tmp = scipy.ndimage.interpolation.rotate(img.reshape(2*dims, 2*dims),
+            angle=_angle, reshape=False, mode='wrap')
+        outs[j,:] = tmp[dims/2:dims+dims/2,dims/2:dims+dims/2].ravel()
+        _angle = numpy.random.vonmises(0.0, dist)/numpy.pi * maxangle
+        tmp = scipy.ndimage.interpolation.rotate(img.reshape(2*dims, 2*dims),
+            angle=_angle, reshape=False, mode='wrap')
+        ins[j,:] = tmp[dims/2:dims+dims/2,dims/2:dims+dims/2].ravel()
+    return ins, outs
