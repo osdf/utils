@@ -29,7 +29,7 @@ def sae():
     cost = T.mean(rec)
     grads = T.grad(cost, W)
 
-def zbae():
+def zbae(activ='TRec', theta):
     """
     Zero bias autoencoder.
     """
@@ -37,7 +37,12 @@ def zbae():
     W = theano.shared(np.asarray(Winit, dtype=theano.config.floatX,
         borrow=True, name='W')
     h = T.dot(x, W)
-    h *= (h>theta)
+    if activ is "TRec":
+        print "Using TRec as activation"
+        h = h * (h > theta)
+    else:
+        print "Using TLin as activation"
+        h = h * ((h*h)> theta)
     rec = T.sum(x - T.dot(h, W.T), axis=1)
     cost = T.mean(rec)
     grads = T.grad(cost, W)
