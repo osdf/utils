@@ -32,6 +32,8 @@ def sae():
 def zbae(activ='TRec', theta):
     """
     Zero bias autoencoder.
+    See Zero-bias autoencoders and the benefits of co-adapting features,
+    by Memisevic, R., Konda, K., Krueger, D.
     """
     x = T.matrix('x')
     W = theano.shared(np.asarray(Winit, dtype=theano.config.floatX,
@@ -65,4 +67,17 @@ def rotations(samples, dims, dist=1., maxangle=30.):
         tmp = scipy.ndimage.interpolation.rotate(img.reshape(2*dims, 2*dims),
             angle=_angle, reshape=False, mode='wrap')
         ins[j,:] = tmp[dims/2:dims+dims/2,dims/2:dims+dims/2].ravel()
+    return ins, outs
+
+
+def shifts(samples, dims, shift=3):
+    """
+    Produce shifted dots.
+    """
+    import scipy.ndimage
+    ins = numpy.random.randn(samples,dims*dims)
+    outs = numpy.zeros((samples, dims*dims))
+    for j, img in enumerate(ins):
+        _shift = numpy.random.randint(-shift, shift+1, 2)
+        outs[j,:] = scipy.ndimage.interpolation.shift(ins[j].reshape(dims, dims), shift=_shift, mode='wrap').ravel()
     return ins, outs
