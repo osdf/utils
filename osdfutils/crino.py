@@ -8,11 +8,11 @@ def skmeans():
     synchronous k-means.
     """
     x = T.matrix('x')
-    W = theano.shared(np.asarray(Winit, dtype=theano.config.floatX,
+    W = theano.shared(np.asarray(Winit, dtype=theano.config.floatX),
         borrow=True, name='W')
     sprod = T.dot(x, W)
 
-    cost = T.sum((X - np.dot(?, W.T))**2)
+    cost = T.sum((X - np.dot(sprod, W.T))**2)
     grads = T.grad(cost, W)
 
 
@@ -21,7 +21,7 @@ def sae():
     synchronous autoencoder.
     """
     x = T.matrix('x')
-    W = theano.shared(np.asarray(Winit, dtype=theano.config.floatX,
+    W = theano.shared(np.asarray(Winit, dtype=theano.config.floatX),
         borrow=True, name='W')
     h = T.dot(x, W)
     sh = h*h
@@ -29,14 +29,15 @@ def sae():
     cost = T.mean(rec)
     grads = T.grad(cost, W)
 
-def zbae(activ='TRec', theta):
+
+def zbae(Winit, activ='TRec', theta=1.):
     """
     Zero bias autoencoder.
     See Zero-bias autoencoders and the benefits of co-adapting features,
     by Memisevic, R., Konda, K., Krueger, D.
     """
     x = T.matrix('x')
-    W = theano.shared(np.asarray(Winit, dtype=theano.config.floatX,
+    W = theano.shared(np.asarray(Winit, dtype=theano.config.floatX),
         borrow=True, name='W')
     h = T.dot(x, W)
     if activ is "TRec":
@@ -47,7 +48,18 @@ def zbae(activ='TRec', theta):
         h = h * ((h*h)> theta)
     rec = T.sum(x - T.dot(h, W.T), axis=1)
     cost = T.mean(rec)
+    params = [W]
     grads = T.grad(cost, W)
+    return params, cost, grads
+    
+    
+def test_zbae(Winit, epochs, lr, momentum, activ='TRec', theta=1.):
+    """
+    Test Zero biase AE on rotations.
+    """
+    params, cost, grads = zbae(Winit, acitv=activ, theta=theta)
+
+    train = theano.function([x], updates=updates, allow_input_downcast=True)
 
 
 def rotations(samples, dims, dist=1., maxangle=30.):
@@ -81,3 +93,25 @@ def shifts(samples, dims, shift=3):
         _shift = numpy.random.randint(-shift, shift+1, 2)
         outs[j,:] = scipy.ndimage.interpolation.shift(ins[j].reshape(dims, dims), shift=_shift, mode='wrap').ravel()
     return ins, outs
+
+
+def momentum(params, grads, model, lastlyr, **kwargs):
+    """
+    Optimizer: SGD with momentum.
+    """
+    print "OPTIMIZER: SGD+Momentum"
+    lr = kwargs['lr']
+    momentum = kwargs['momentum']
+    _moments = []
+    for p in params:
+        p_mom = theano.shared(np.zeros(p.get_value(borrow=True).shape,
+            dtype=theano.config.floatX))
+        _moments.append(p_mom)
+
+    updates = OrderedDict()
+    for grad_i, mom_i in zip(grads, _moments):
+        updates[mom_i] =  momentum*mom_i + lr*grad_i
+
+    for param_i, mom_i in zip(params, _moments):
+            updates[param_i] = param_i - updates[mom_i]
+    return updates
