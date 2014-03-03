@@ -51,15 +51,24 @@ def zbae(Winit, activ='TRec', theta=1.):
     params = [W]
     grads = T.grad(cost, W)
     return params, cost, grads
-    
-    
-def test_zbae(Winit, epochs, lr, momentum, activ='TRec', theta=1.):
-    """
-    Test Zero biase AE on rotations.
-    """
-    params, cost, grads = zbae(Winit, acitv=activ, theta=theta)
+ 
 
+def test_zbae(hidden, indim, epochs, lr, momentum, btsz, batches,
+        activ='TRec', theta=1.):
+    """
+    Test Zero bias AE on rotations.
+    """
+    Winit = np.asarray(np.random.standard_normal((indim, hidden)), dtype=theano.config.floatX)
+    params, cost, grads = zbae(Winit, activ=activ, theta=theta)
+    updates = momentum(params, grads)
     train = theano.function([x], updates=updates, allow_input_downcast=True)
+    # get data
+    data = rotations(btsz*batches, indim)
+    for epoch in xrange(epochs):
+        cost = 0
+        for mbi in xrange(batches):
+            cost += train(data[mbi*btsz:(mbi+1)*btsz])
+        print epoch, cost
 
 
 def rotations(samples, dims, dist=1., maxangle=30.):
@@ -95,7 +104,7 @@ def shifts(samples, dims, shift=3):
     return ins, outs
 
 
-def momentum(params, grads, model, lastlyr, **kwargs):
+def momentum(params, grads, **kwargs):
     """
     Optimizer: SGD with momentum.
     """
