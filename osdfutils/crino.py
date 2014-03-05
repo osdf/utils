@@ -118,15 +118,15 @@ def rotations(samples, dims, dist=1., maxangle=30.):
     return seq
 
 
-def shifts(samples, dims, shift=3):
+def shifts(samples, dims, shft=3):
     """
     Produce shifted dots.
     """
     import scipy.ndimage
     shift = np.random.randn(samples,2*dims*dims)
-    for j, img in enumerate(ins):
-        _shift = np.random.randint(-shift, shift+1, 2)
-        shift[j,dims*dims:] = scipy.ndimage.interpolation.shift(ins[j].reshape(dims, dims), shift=_shift, mode='wrap').ravel()
+    for j, img in enumerate(shift):
+        _shift = np.random.randint(-shft, shft+1, 2)
+        shift[j,dims*dims:] = scipy.ndimage.interpolation.shift(shift[j, :dims*dims].reshape(dims, dims), shift=_shift, mode='wrap').ravel()
     return shift
 
 
