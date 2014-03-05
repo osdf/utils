@@ -62,12 +62,16 @@ def zbae(Winit, activ='TRec', theta=1.):
  
 
 def test_zbae(hidden, indim, epochs, lr, momentum, btsz, batches,
-        activ='TRec', theta=1.):
+        activ='TRec', theta=1., version="rotations"):
     """
     Test Zero bias AE on rotations.
     """
-    print "Generating rotation data ..."
-    data = rotations(btsz*batches, indim)
+    if version is "rotations":
+        print "Generating rotation data ..."
+        data = rotations(btsz*batches, indim)
+    else:
+        print "Generating shift data ..."
+        data = shifts(btsz*batches, indim)
     
     print "Building model ..."
     Winit = np.asarray(0.1 * np.random.standard_normal((data.shape[1], hidden)), dtype=theano.config.floatX)
@@ -82,6 +86,17 @@ def test_zbae(hidden, indim, epochs, lr, momentum, btsz, batches,
             cost += btsz*train(data[mbi*btsz:(mbi+1)*btsz])
         print epoch, cost
     return params
+
+
+def initweight(variant="normal", **kwargs):
+    """
+    Init weights.
+    """
+    if variant is "normal":
+        pass
+    elif variant is "sparse":
+        pass
+    return
 
 
 def rotations(samples, dims, dist=1., maxangle=30.):
@@ -108,12 +123,11 @@ def shifts(samples, dims, shift=3):
     Produce shifted dots.
     """
     import scipy.ndimage
-    ins = np.random.randn(samples,dims*dims)
-    outs = np.zeros((samples, dims*dims))
+    shift = np.random.randn(samples,2*dims*dims)
     for j, img in enumerate(ins):
         _shift = np.random.randint(-shift, shift+1, 2)
-        outs[j,:] = scipy.ndimage.interpolation.shift(ins[j].reshape(dims, dims), shift=_shift, mode='wrap').ravel()
-    return ins, outs
+        shift[j,dims*dims:] = scipy.ndimage.interpolation.shift(ins[j].reshape(dims, dims), shift=_shift, mode='wrap').ravel()
+    return shift
 
 
 def momntm(params, grads, **kwargs):
