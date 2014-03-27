@@ -10,7 +10,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="utils",
-    keywords="Machine Learning Optimization",
+    keywords="Machine Learning Code Snippets and Models",
     packages=find_packages(exclude=['examples', 'docs']),
     include_package_data=True,
 )

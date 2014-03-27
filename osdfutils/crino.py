@@ -74,7 +74,8 @@ def test_zbae(hidden, indim, epochs, lr, momentum, btsz, batches,
         data = shifts(btsz*batches, indim)
     
     print "Building model ..."
-    Winit = np.asarray(0.1 * np.random.standard_normal((data.shape[1], hidden)), dtype=theano.config.floatX)
+    inits = {"std": 0.1, "n": data.shape[1], "m": hidden}
+    Winit = initweight(variant="normal", **inits) 
     params, cost, grads, x = zbae(Winit, activ=activ, theta=theta)
     learner = {"lr": lr, "momentum": momentum}
     updates = momntm(params, grads, **learner)
@@ -92,11 +93,18 @@ def initweight(variant="normal", **kwargs):
     """
     Init weights.
     """
+    n = kwargs["n"]
+    m = kwargs["m"]
     if variant is "normal":
-        pass
+        std = kwargs["std"]
+        weights = np.asarray(std*np.random.standard_normal((n, m)), dtype=theano.config.floatX)
     elif variant is "sparse":
-        pass
-    return
+        sparsity = kwargs["sparsity"]
+        weights = np.zeroes((m, n), dtype=theano.config.floatX)
+        for w in weights:
+            w[random.sample(xrange(n), sparsity)] = np.random.randn(sparsity)
+        weights = weights.T
+    return weights
 
 
 def rotations(samples, dims, dist=1., maxangle=30.):
