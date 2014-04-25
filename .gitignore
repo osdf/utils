@@ -1,1 +1,3 @@
 *.gz
+*.h5
+*checkpoints*
