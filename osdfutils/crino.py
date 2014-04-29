@@ -207,6 +207,8 @@ def kl_dg_g(config, params, im):
     """
     inpt = im[config['inpt']]
     dim = config['dim']
+    # or
+    # dim = inpt.shape[1]//2
 
     mu = inpt[:, :dim]
     log_var = inpt[:, dim:]
@@ -229,35 +231,30 @@ def kl_dg_g(config, params, im):
     cost = -(1 + log_var - mu_sq - var)
     cost = T.sum(cost, axis=1)
     cost = 0.5 * T.mean(cost)
-    return cost, z, params
+    return cost
 
 
-def decoder_bern(z, t, W1init, W2init, activ=T.tanh):
+def bern_xe(config, params, im):
     """
-    A decoder representing a bernoulli vector. Generate the observations
-    from _z_, compare to targets _t_.
+    Bernoulli cross entropy.
+
+    Used for predicting binary variables, 
+    needs a target.
     """
-    W1 = theano.shared(np.asarray(W1init, dtype=theano.config.floatX),
-        borrow=True, name='W1_dec_bern')
-    _b1 = np.zeros((W1init.shape[1],), dtype=theano.config.floatX)
-    b1 = theano.shared(value=_b1, borrow=True, name="b1_dec")
-
-    h = activ(T.dot(z, W1) + b1)
-
-    W2 = theano.shared(np.asarray(W2init, dtype=theano.config.floatX),
-        borrow=True, name='W2_dec_bern')
-    _b2 = np.zeros((W2init.shape[1],), dtype=theano.config.floatX)
-    b2 = theano.shared(value=_b2, borrow=True, name="b2_dec")
-
-    bern = T.nnet.sigmoid(T.dot(h, W2) + b2)
-
+    inpt = im[config['inpt']]
+    t = im[config['trgt']]
+    dim = config['dim']
+    # or
+    # dim = inpt.shape[1]//2
+    
+    pred = T.nnet.sigmoid(inpt)
+    im['predict'] = pred 
     # difference to paper: gradient _descent_, minimize upper bound
     # -> needs a negative sign
-    cost = -(t*T.log(bern + 1e-4) + (1-t)*T.log(1-bern + 1e-4))
+    cost = -(t*T.log(pred + 1e-4) + (1-t)*T.log(1-pred + 1e-4))
     cost = T.sum(cost, axis=1)
     cost = T.mean(cost)
-    params = [W1, b1, W2, b2]
-    return cost, bern, params
+    return cost
 
 
 def vae(encoder, decoder, platent, tied=False):
