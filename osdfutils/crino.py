@@ -7,6 +7,9 @@ import theano
 import theano.tensor as T
 from collections import OrderedDict
 
+# list of cost intermediates
+vae_cost_ims = {}
+vae_handover = {}
 
 def skmeans():
     """
@@ -149,6 +152,8 @@ def momntm(params, grads, **kwargs):
     print "OPTIMIZER: SGD+Momentum"
     lr = kwargs['lr']
     momentum = kwargs['momentum']
+    print "lr: {0}; momentum: {1}".format(lr, momentum)
+
     _moments = []
     for p in params:
         p_mom = theano.shared(np.zeros(p.get_value(borrow=True).shape,
@@ -170,34 +175,40 @@ def mlp(config, params, im):
     This depends on the loss that is specified
     in the _config_ dictionary.
     """
+    tag = config['tag']
+
     shapes = config['shapes']
     activs = config['activs']
+
+    assert len(shapes) == len(activs),\
+            "[MLP -- {0}]: One layer, One activation.".format(tag)
 
     inpt = im[config['inpt']]
 
     _tmp_name = config['inpt']
     for i, (shape, act) in enumerate(zip(shapes, activs)):
         # fully connected
-        _tmp = initweight(layer[0], variant=config["init"])
-        _tmp_name = "enc_w{0}".format(i)
+        _tmp = initweight(shape, variant=config["init"])
+        _tmp_name = "{0}_w{1}".format(tag, i)
         _w = theano.shared(value=_tmp, borrow=True, name=_tmp_name)
         params.append(_w)
         # bias
-        _tmp = np.zeros((layer[0][1],), dtype=theano.config.floatX)
-        _tmp_name = "enc_b{0}".format(i)
+        _tmp = np.zeros((shape[1],), dtype=theano.config.floatX)
+        _tmp_name = "{0}_b{1}".format(tag, i)
         _b = theano.shared(value=_tmp, borrow=True, name=_tmp_name)
         params.append(_b)
         inpt = act(T.dot(inpt, _w) + _b)
-        _tmp_name = "enc_layer{0}".format(i)
+        _tmp_name = "{0}_layer{1}".format(tag, i)
         im[_tmp_name] = inpt
 
-    print "[MLP] building cost."
-    print "[MLP] designated input:", _tmp_name
+    print "[MLP -- {0}] building cost.".format(tag)
+    print "[MLP -- {0}] designated input: {1}".format(tag, _tmp_name)
     cost_conf = config['cost']
     cost_conf['inpt'] = _tmp_name
 
     cost = cost_conf['type']
     loss = cost(config=cost_conf, params=params, im=im)
+    return loss
 
 
 def kl_dg_g(config, params, im):
@@ -206,10 +217,8 @@ def kl_dg_g(config, params, im):
     gaussian and zero/one gaussian.
     """
     inpt = im[config['inpt']]
-    dim = config['dim']
-    # or
-    # dim = inpt.shape[1]//2
 
+    dim = inpt.shape[1] / 2
     mu = inpt[:, :dim]
     log_var = inpt[:, dim:]
 
@@ -231,21 +240,23 @@ def kl_dg_g(config, params, im):
     cost = -(1 + log_var - mu_sq - var)
     cost = T.sum(cost, axis=1)
     cost = 0.5 * T.mean(cost)
+    im['kl_dg_g'] = cost
     return cost
+
+
+vae_cost_ims[kl_dg_g] = ('kl_dg_g_mu', 'kl_dg_g_log_var', 'kl_dg_g')
+vae_handover[kl_dg_g] = ('z')
 
 
 def bern_xe(config, params, im):
     """
     Bernoulli cross entropy.
 
-    Used for predicting binary variables, 
-    needs a target.
+    Used for predicting binary
+    variables, needs a target.
     """
     inpt = im[config['inpt']]
     t = im[config['trgt']]
-    dim = config['dim']
-    # or
-    # dim = inpt.shape[1]//2
     
     pred = T.nnet.sigmoid(inpt)
     im['predict'] = pred 
@@ -254,15 +265,18 @@ def bern_xe(config, params, im):
     cost = -(t*T.log(pred + 1e-4) + (1-t)*T.log(1-pred + 1e-4))
     cost = T.sum(cost, axis=1)
     cost = T.mean(cost)
+    im['bern_xe'] = cost
     return cost
 
 
-def vae(encoder, decoder, platent, tied=False):
+vae_cost_ims[kl_dg_g] = ('predict', 'bern_xe')
+
+
+def vae(encoder, decoder, tied=False):
     """
     Variational Autoencoder. Provide information on
     _encoder_ and _decoder_ in these dictionaries.
-    _platent_ represents the reparametrized latent variable
-    layer. _tied_ indicates wether the first layer of
+    _tied_ indicates wether the first layer of
     the encoder and the last layer of the decoder are tied.
 
     See:
@@ -281,17 +295,18 @@ def vae(encoder, decoder, platent, tied=False):
     cost = 0
 
     enc = encoder['type']
-    pass_over = enc(config=encoder, params=params, im=intermediates)
+    encoder['inpt'] = 'inpt'
+    cost_latent = enc(config=encoder, params=params, im=intermediates)
 
-    plat = platent['type']
-    cost_latent = plat(config=platent, params=params, im=intermediates)
     cost = cost + cost_latent
 
     dec = decoder['type']
-    cost_dec = dec(config=decoder, params=params, im=intermediates, passed=pass_over)
+    # add target name for decoder cost
+    decoder['cost']['trgt'] = 'inpt'
+    cost_dec = dec(config=decoder, params=params, im=intermediates)
     cost = cost + cost_dec
 
-    return intermediates, cost, params
+    return cost, params, intermediates
 
 
 def adadelta(params, grads, **kwargs):
@@ -302,6 +317,7 @@ def adadelta(params, grads, **kwargs):
     print "OPTIMIZER: AdaDELTA"
     lr = kwargs['lr']
     decay = kwargs['decay']
+    print "lr: {0}; decay: {1}".format(lr, decay)
 
     # Average Root Mean Squared (arms) Gradients
     arms_grads = []
@@ -337,8 +353,20 @@ def adadelta(params, grads, **kwargs):
     return updates
 
 
-def test_vae(enc_hidden=500, enc_out=2, dec_hidden=500,
-        epochs=100, lr=0.0001, momentum=0.9, btsz=100):
+def idty(x):
+    return x
+
+
+def relu(x):
+    return T.maximum(x, 0)
+
+
+def softplus(x):
+    return T.log(1 + T.exp(x))
+
+
+def test_vae(enc_out=2, epochs=100, lr=1,
+        momentum=0.9, decay=0.9, btsz=100):
     """
     Test variational autoencdoer on MNIST.
     This needs mnist.pkl.gz in your directory.
@@ -357,23 +385,42 @@ def test_vae(enc_hidden=500, enc_out=2, dec_hidden=500,
     print "lr:{0}, momentum:{1}".format(lr, momentum)
     print
 
-    # specify decoder
-    mlp_enc = [(data.shape[1], enc_hidden), (enc_hidden, enc_out),
-            (enc_hidden, enc_out)]
-    encoder = encoder_dg
-
     # specify encoder
-    mlp_dec = [(enc_out, dec_hidden), (dec_hidden, data.shape[1])]
-    decoder = decoder_bern
+    enc = {
+        'tag': 'enc',
+        'type': mlp,
+        'shapes': [(28*28, 200), (200, enc_out*2)],
+        'activs': [T.tanh, idty],
+        'init': "normal",
+        'cost': {
+            'type': kl_dg_g,
+        }
+    }
 
-    params, cost, grads, x, z, rec = vae(encoder, decoder, mlp_enc, mlp_dec)
-    learner = {"lr": lr, "momentum": momentum}
-    updates = momntm(params, grads, **learner)
-    train = theano.function([x], cost, updates=updates, allow_input_downcast=True)
-    # get data
+    # 'inpt': 'z', this should be automatic by lookup of encoder type.
+    dec = {
+        'tag': 'dec',
+        'type': mlp,
+        'inpt': 'z',
+        'shapes': [(enc_out, 200), (200, 28*28)],
+        'activs': [T.tanh, idty],
+        'init': "normal",
+        'cost': {
+            'type': bern_xe,
+        }
+    }
+
+    cost, params, ims = vae(encoder=enc, decoder=dec)
+    grads = T.grad(cost, params)
+
+    learner = {"lr": lr, "momentum": momentum, "decay": decay}
+    #updates = momntm(params, grads, **learner)
+    updates = adadelta(params, grads, **learner)
+    train = theano.function([ims['inpt']], cost, updates=updates, allow_input_downcast=True)
+
+    sz = data.shape[0]
     for epoch in xrange(epochs):
         cost = 0
         for mbi in xrange(batches):
             cost += btsz*train(data[mbi*btsz:(mbi+1)*btsz])
-        print epoch, cost/data.shape[0]
-    return params
+        print epoch, cost/sz

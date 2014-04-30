@@ -5,13 +5,19 @@
 __author__ = 'Christian Osendorfer, osendorf@in.tum.de'
 
 
-from setuptools import setup, find_packages
+from distutils.core import setup
+from setuptools import find_packages
 
 
 setup(
-    name="utils",
-    keywords="Machine Learning Code Snippets and Models",
-    packages=find_packages(exclude=['examples', 'docs']),
+    name="osdfutils",
+    version="pre-0.0",
+    author="Christian Osendorfer",
+    author_email="osendorf@gmail.com",
+    url="http://github.com/osdf/utils/",
+    license="BSD license",
+    description="Machine Learning Code Snippets and Models",
+    packages=find_packages(exclude=['examples', 'docs', 'notebooks']),
     include_package_data=True,
 )
 
