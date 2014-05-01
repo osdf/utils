@@ -227,6 +227,63 @@ def mlp(config, params, im):
     return loss
 
 
+def conv(config, params, im):
+    """
+    Convolutional encoder.
+    """
+    tag = config['tag']
+
+    shapes = config['shapes']
+    activs = config['activs']
+
+   
+    for i, (shape, act) in enumerate(zip(shapes, activs)):
+        fan_in = np.prod(filter_shape[1:])
+        fan_out = (filter_shape[0] * np.prod(filter_shape[2:]) /
+                   np.prod(poolsize))
+        W_bound = np.sqrt(6. / (fan_in + fan_out))
+        
+        if W is not None:
+            self.W = theano.shared(value=np.asarray(W, 
+                dtype=theano.config.floatX), borrow=True)
+            print "W is not None and loaded", W.shape
+        else:
+            if init_conv is 'gaussian':
+                print "Using gaussian initialization in CNN."
+                self.W = theano.shared(np.asarray(rng.normal(0, 
+                    0.01, size=filter_shape), dtype=theano.config.floatX),
+                    borrow=True)
+            else:
+                self.W = theano.shared(np.asarray(rng.uniform(
+                    low=-W_bound, high=W_bound, size=filter_shape),
+                    dtype=theano.config.floatX), borrow=True, name='W')
+
+        # the bias is a 1D tensor -- one bias per output feature map
+        if b is not None:
+            self.b = theano.shared(value=np.asarray(b, 
+                dtype=theano.config.floatX), borrow=True)
+        else:
+            b_values = np.zeros((filter_shape[0],), dtype=theano.config.floatX)
+            if activ_ is "relu":
+                print "Bias 1 should accelerate learning with ReLU."
+                b_values += 1
+            self.b = theano.shared(value=b_values, borrow=True, name='b')
+
+        # convolve input feature maps with filters
+        conv_out = conv.conv2d(input=input, filters=self.W, 
+                filter_shape=filter_shape, image_shape=image_shape)
+
+        # downsample each feature map individually, using maxpooling
+        pooled_out = downsample.max_pool_2d(input=conv_out, 
+                ds=poolsize, ignore_border=True)
+
+        self.output = activ(pooled_out + 
+                self.b.dimshuffle('x', 0, 'x', 'x'), **kwargs)
+
+        # store parameters of this layer
+        params.append = [self.W, self.b]
+
+
 def kl_dg_g(config, params, im):
     """
     Kullback-Leibler divergnence between diagonal
