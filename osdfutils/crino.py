@@ -202,7 +202,7 @@ def mlp(config, params, im):
         im[_tmp_name] = inpt
 
     print "[MLP -- {0}] building cost.".format(tag)
-    print "[MLP -- {0}] designated input: {1}".format(tag, _tmp_name)
+    print "[MLP -- {0}] its designated input: {1}".format(tag, _tmp_name)
     cost_conf = config['cost']
     cost_conf['inpt'] = _tmp_name
 
@@ -283,7 +283,7 @@ def vae(encoder, decoder, tied=False):
     Autoencoding Variational Bayes by Kingma, Welling. 2014.
     """
     # journey starts here:
-    x = T.matrix('x')
+    x = T.matrix('inpt')
 
     # collect intermediate expressions, just in case.
     intermediates = {'inpt': x}
@@ -297,9 +297,10 @@ def vae(encoder, decoder, tied=False):
     enc = encoder['type']
     encoder['inpt'] = 'inpt'
     cost_latent = enc(config=encoder, params=params, im=intermediates)
-
     cost = cost + cost_latent
 
+    # decoder needs a field 'inpt'. Its value depends on the encoder cost
+    decoder['inpt'] = vae_handover[encoder['cost']['type']]
     dec = decoder['type']
     # add target name for decoder cost
     decoder['cost']['trgt'] = 'inpt'
