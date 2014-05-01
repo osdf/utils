@@ -183,15 +183,31 @@ def mlp(config, params, im):
     assert len(shapes) == len(activs),\
             "[MLP -- {0}]: One layer, One activation.".format(tag)
 
+    if 'tied' in config:
+        tied = config['tied']
+    else:
+        tied = {}
+
     inpt = im[config['inpt']]
 
     _tmp_name = config['inpt']
     for i, (shape, act) in enumerate(zip(shapes, activs)):
         # fully connected
-        _tmp = initweight(shape, variant=config["init"])
-        _tmp_name = "{0}_w{1}".format(tag, i)
-        _w = theano.shared(value=_tmp, borrow=True, name=_tmp_name)
-        params.append(_w)
+        if i in tied:
+            _tied = False
+            for p in params:
+                if tied[i] == p.name:
+                    print "Tieing layer {0} in {1} with {2}".format(i, tag, p.name)
+                    _w = p.T
+                    _w = _w[:shape[0], :shape[1]]
+                    _tied = True
+            assert _tied,\
+                    "[MLP -- {0}]: Tieing was set for layer {1}, but unfulfilled!".format(tag, i)
+        else:
+            _tmp = initweight(shape, variant=config["init"])
+            _tmp_name = "{0}_w{1}".format(tag, i)
+            _w = theano.shared(value=_tmp, borrow=True, name=_tmp_name)
+            params.append(_w)
         # bias
         _tmp = np.zeros((shape[1],), dtype=theano.config.floatX)
         _tmp_name = "{0}_b{1}".format(tag, i)
@@ -272,7 +288,7 @@ def bern_xe(config, params, im):
 vae_cost_ims[kl_dg_g] = ('predict', 'bern_xe')
 
 
-def vae(encoder, decoder, tied=False):
+def vae(encoder, decoder, tied=None):
     """
     Variational Autoencoder. Provide information on
     _encoder_ and _decoder_ in these dictionaries.
@@ -301,6 +317,9 @@ def vae(encoder, decoder, tied=False):
 
     # decoder needs a field 'inpt'. Its value depends on the encoder cost
     decoder['inpt'] = vae_handover[encoder['cost']['type']]
+    if tied is not None:
+        decoder['tied'] = tied
+
     dec = decoder['type']
     # add target name for decoder cost
     decoder['cost']['trgt'] = 'inpt'
