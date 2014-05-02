@@ -227,6 +227,48 @@ def mlp(config, params, im):
     return loss
 
 
+def pmlp(config, params, im):
+    """
+    A pmlp acting as an encoding or decoding layer --
+    This depends on the loss that is specified
+    in the _config_ dictionary. A 'pmlp' is a
+    MLP with product interactions
+    """
+    tag = config['tag']
+
+    shapes = config['shapes']
+    activs = config['activs']
+
+    assert len(shapes) == len(activs),\
+            "[MLP -- {0}]: One layer, One activation.".format(tag)
+
+    inpt = im[config['inpt']]
+
+    _tmp_name = config['inpt']
+    for i, (shape, act) in enumerate(zip(shapes, activs)):
+        # fully connected
+        _tmp = initweight(shape, variant=config["init"])
+        _tmp_name = "{0}_w{1}".format(tag, i)
+        _w = theano.shared(value=_tmp, borrow=True, name=_tmp_name)
+        params.append(_w)
+        _tmp = np.zeros((shape[1],), dtype=theano.config.floatX)
+        _tmp_name = "{0}_b{1}".format(tag, i)
+        _b = theano.shared(value=_tmp, borrow=True, name=_tmp_name)
+        params.append(_b)
+        inpt = act(T.dot(inpt, _w) + _b)
+        _tmp_name = "{0}_layer{1}".format(tag, i)
+        im[_tmp_name] = inpt
+
+    print "[MLP -- {0}] building cost.".format(tag)
+    print "[MLP -- {0}] its designated input: {1}".format(tag, _tmp_name)
+    cost_conf = config['cost']
+    cost_conf['inpt'] = _tmp_name
+
+    cost = cost_conf['type']
+    loss = cost(config=cost_conf, params=params, im=im)
+    return loss
+
+
 def conv(config, params, im):
     """
     Convolutional encoder.
