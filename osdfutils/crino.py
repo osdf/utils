@@ -363,6 +363,39 @@ vae_cost_ims[kl_dg_g] = ('kl_dg_g_mu', 'kl_dg_g_log_var', 'kl_dg_g')
 vae_handover[kl_dg_g] = ('z')
 
 
+def kl_dlap_lap(config, params, im):
+    """
+    Kullback-Leibler divergnence between diagonal
+    laplacian and zero/one laplacian.
+    """
+    inpt = im[config['inpt']]
+
+    dim = inpt.shape[1] / 2
+    mu = inpt[:, :dim]
+    log_b = inpt[:, dim:]
+
+    im['kl_dlap_lap__mu'] = mu
+    im['kl_dlap_lap_log_b'] = ln_b
+
+    mu_sq = mu * mu
+    b = T.exp(ln_b)
+
+    rng = T.shared_randomstreams.RandomStreams()
+    # uniform -1/2;1/2
+    uni = rng.uniform(size=mu.shape, low=-0.5, high=0.5)
+    # Reparameterized latent variable
+    z = mu - b*T.sgn(uni)*T.log(1 - 2*T.abs_(uni))
+    im['z'] = z
+    
+    # difference to paper: gradient _descent_, minimize an upper bound
+    # -> needs a negative sign
+    cost = -ln_b + b*T.exp(-T.abs_(mu)/b) + T.abs_(mu) - 1
+    cost = T.sum(cost, axis=1)
+    cost = T.mean(cost)
+    im['kl_dlap_lap'] = cost
+    return cost
+
+
 def bern_xe(config, params, im):
     """
     Bernoulli cross entropy.
