@@ -383,7 +383,7 @@ def kl_dlap_lap(config, params, im):
     rng = T.shared_randomstreams.RandomStreams()
     # uniform -1/2;1/2
     uni = rng.uniform(size=mu.shape, low=-0.5, high=0.5)
-    # Reparameterized latent variable
+    # Reparameterized latent variable, see e.g. Wikipedia
     z = mu - b*T.sgn(uni)*T.log(1 - 2*T.abs_(uni))
     im['z'] = z
     
@@ -394,6 +394,10 @@ def kl_dlap_lap(config, params, im):
     cost = T.mean(cost)
     im['kl_dlap_lap'] = cost
     return cost
+
+
+vae_cost_ims[kl_dlap_lap] = ('kl_dlap_lap_mu', 'kl_dlap_laplog_var', 'kl_dlap_lap')
+vae_handover[kl_dlap_lap] = ('z')
 
 
 def bern_xe(config, params, im):
@@ -417,7 +421,7 @@ def bern_xe(config, params, im):
     return cost
 
 
-vae_cost_ims[kl_dg_g] = ('predict', 'bern_xe')
+vae_cost_ims[bern_xe] = ('predict', 'bern_xe')
 
 
 def vae(encoder, decoder, tied=None):
