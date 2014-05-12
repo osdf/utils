@@ -372,9 +372,9 @@ def kl_dlap_lap(config, params, im):
 
     dim = inpt.shape[1] / 2
     mu = inpt[:, :dim]
-    log_b = inpt[:, dim:]
+    ln_b = inpt[:, dim:]
 
-    im['kl_dlap_lap__mu'] = mu
+    im['kl_dlap_lap_mu'] = mu
     im['kl_dlap_lap_log_b'] = ln_b
 
     mu_sq = mu * mu
