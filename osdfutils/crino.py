@@ -6,10 +6,14 @@ import numpy as np
 import theano
 import theano.tensor as T
 from collections import OrderedDict
+from theano.tensor.signal import downsample
+from theano.tensor.nnet import conv
+
 
 # list of cost intermediates
 vae_cost_ims = {}
 vae_handover = {}
+
 
 def skmeans():
     """
@@ -101,7 +105,11 @@ def initweight(shape, variant="normal", **kwargs):
             std = kwargs["std"]
         else:
             std = 0.1
-        weights = np.asarray(std * np.random.standard_normal(shape), dtype=theano.config.floatX)
+        weights = np.asarray(np.random.normal(loc=0, scale=std, size=shape),
+                dtype=theano.config.floatX)
+    elif variant is "uniform":
+        fan_in = kwargs["fan_in"]
+        fan_out = kwargs["fan_out"] 
     elif variant is "sparse":
         sparsity = kwargs["sparsity"]
         weights = np.zeroes(shape, dtype=theano.config.floatX)
@@ -188,7 +196,7 @@ def mlp(config, params, im):
     else:
         tied = {}
 
-    inpt = im[config['inpt']]
+    inpt = im[config['inpt']][0]
 
     _tmp_name = config['inpt']
     for i, (shape, act) in enumerate(zip(shapes, activs)):
@@ -277,53 +285,96 @@ def conv(config, params, im):
 
     shapes = config['shapes']
     activs = config['activs']
+    pools = config['pools']
 
-   
-    for i, (shape, act) in enumerate(zip(shapes, activs)):
-        fan_in = np.prod(filter_shape[1:])
-        fan_out = (filter_shape[0] * np.prod(filter_shape[2:]) /
-                   np.prod(poolsize))
-        W_bound = np.sqrt(6. / (fan_in + fan_out))
+    assert len(shapes) == len(activs),\
+            "[CNN -- {0}]: One layer, One activation.".format(tag)
+    assert len(shapes) == len(pools),\
+            "[CNN -- {0}]: One layer, One Pool.".format(tag)
+
+    imshape = config['imshape']
+
+    init = config["init"]
+
+    inpt = im[config['inpt']][0]
+    inpt = inpt.reshape(imshape)
+    _tmp_name = config['inpt']
+    for i, (shape, act, pool) in enumerate(zip(shapes, activs, pools)):
+        assert imshape[1] == shape[1],\
+            "[CNN -- {0}, L{1}]: Input and Shapes need to fit.".format(tag, i)
+    
+        if init == "normal":
+            print "[CNN -- {0}]: Init via Gaussian.".format(tag)
+            _tmp = initweight(shape, variant=init, {"std": 0.1}) 
+        else:
+            print "[CNN -- {0}]: Init via Uniform.".format(tag)
+            fan_in = np.prod(shape[1:])
+            fan_out = (shape[0] * np.prod(shape[2:]) / np.prod(pool))
+            winit = np.sqrt(6. / (fan_in + fan_out))
+            _tmp = np.asarray(np.random.uniform(low=-winit, high=winit,
+                size=shape), dtype=theano.config.floatX)
+        _tmp_name = "{0}_cnn_w{1}".format(tag, i)
+        _w = theano.shared(value=_tmp, borrow=True, name=_tmp_name)
+        params.append(_w)
+        _tmp = np.zeros((shape[1],), dtype=theano.config.floatX)
+        _tmp_name = "{0}_cnn_b{1}".format(tag, i)
+        _b = theano.shared(value=_tmp, borrow=True, name=_tmp_name)
+        params.append(_b)
+
+        _conv = conv.conv2d(input=inpt, filters=_w, filter_shape=shape,
+                image_shape=imshape)
+        _tmp_name = "{0}_conv_layer{1}".format(tag, i)
+        im[_tmp_name] = _conv
         
-        if W is not None:
-            self.W = theano.shared(value=np.asarray(W, 
-                dtype=theano.config.floatX), borrow=True)
-            print "W is not None and loaded", W.shape
-        else:
-            if init_conv is 'gaussian':
-                print "Using gaussian initialization in CNN."
-                self.W = theano.shared(np.asarray(rng.normal(0, 
-                    0.01, size=filter_shape), dtype=theano.config.floatX),
-                    borrow=True)
-            else:
-                self.W = theano.shared(np.asarray(rng.uniform(
-                    low=-W_bound, high=W_bound, size=filter_shape),
-                    dtype=theano.config.floatX), borrow=True, name='W')
+        _pool = downsample.max_pool_2d(input=_conv, ds=pool, ignore_border=True)
+        _tmp_name = "{0}_pool_layer{1}".format(tag, i)
+        im[_tmp_name] = _pool
+        
+        inpt = act(_pool + _b.dimshuffle('x', 0, 'x', 'x'))
+        _tmp_name = "{0}_cnn_layer{1}".format(tag, i)
+        im[_tmp_name] = inpt
+        imshape = (imshape[0], shape[1], (imshape[0] - shape[2] + 1)//pool[0],\
+                (imshape[1] - shape[3] + 1)//pool[1])
 
-        # the bias is a 1D tensor -- one bias per output feature map
-        if b is not None:
-            self.b = theano.shared(value=np.asarray(b, 
-                dtype=theano.config.floatX), borrow=True)
-        else:
-            b_values = np.zeros((filter_shape[0],), dtype=theano.config.floatX)
-            if activ_ is "relu":
-                print "Bias 1 should accelerate learning with ReLU."
-                b_values += 1
-            self.b = theano.shared(value=b_values, borrow=True, name='b')
+    im[_tmp_name] = im[_tmp_name].flatten(2)
+    config['handover'] = (_tmp_name],)
 
-        # convolve input feature maps with filters
-        conv_out = conv.conv2d(input=input, filters=self.W, 
-                filter_shape=filter_shape, image_shape=image_shape)
+    if 'cost' in config:
+        print "[CNN -- {0}] building cost.".format(tag)
+        print "[CNN -- {0}] cost input: {1}".format(tag, _tmp_name)
+        cost_conf = config['cost']
+        cost_conf['inpt'] = _tmp_name
 
-        # downsample each feature map individually, using maxpooling
-        pooled_out = downsample.max_pool_2d(input=conv_out, 
-                ds=poolsize, ignore_border=True)
+        cost = cost_conf['type']
+        loss = cost(config=cost_conf, params=params, im=im)
+    else:
+        print "[CNN -- {0}] no loss. Is this a composite?".format(tag)
+        loss = None
 
-        self.output = activ(pooled_out + 
-                self.b.dimshuffle('x', 0, 'x', 'x'), **kwargs)
+    return loss
 
-        # store parameters of this layer
-        params.append = [self.W, self.b]
+
+def composite(config, params, im):
+    """
+    A composite is a meta structure. Connect
+    several models together, e.g. CNN + MLP.
+    """
+    tag = config['tag']
+    components = config['components']
+
+    inpt = im[config['inpt']]
+    
+    for comp in components:
+
+
+    print "[COMP -- {0}] building cost.".format(tag)
+    print "[COMP -- {0}] its designated input: {1}".format(tag, _tmp_name)
+    cost_conf = config['cost']
+    cost_conf['inpt'] = _tmp_name
+
+    cost = cost_conf['type']
+    loss = cost(config=cost_conf, params=params, im=im)
+    return loss
 
 
 def kl_dg_g(config, params, im):
@@ -360,7 +411,7 @@ def kl_dg_g(config, params, im):
 
 
 vae_cost_ims[kl_dg_g] = ('kl_dg_g_mu', 'kl_dg_g_log_var', 'kl_dg_g')
-vae_handover[kl_dg_g] = ('z')
+vae_handover[kl_dg_g] = ('z',)
 
 
 def kl_dlap_lap(config, params, im):
@@ -397,7 +448,7 @@ def kl_dlap_lap(config, params, im):
 
 
 vae_cost_ims[kl_dlap_lap] = ('kl_dlap_lap_mu', 'kl_dlap_laplog_var', 'kl_dlap_lap')
-vae_handover[kl_dlap_lap] = ('z')
+vae_handover[kl_dlap_lap] = ('z', )
 
 
 def bern_xe(config, params, im):
@@ -438,7 +489,7 @@ def vae(encoder, decoder, special=None, tied=None):
     x = T.matrix('inpt')
 
     # collect intermediate expressions, just in case.
-    intermediates = {'inpt': x}
+    intermediates = {'inpt': (x,)}
 
     # collect parameters
     params = []
@@ -515,6 +566,51 @@ def adadelta(params, grads, **kwargs):
             updates[param_i] = param_i - delta_i
     return updates
 
+
+def rmsprop(params, grads, **kwargs):
+    """
+    RMSprop.
+    """
+    eps = 10e-8
+    print "OPTIMIZER: rmsPROP"
+    lr = kwargs['lr']
+    decay = kwargs['decay']
+    mom = kwargs['momentum']
+
+    print "lr: {0}; decay: {1}, momentum: {2}".format(lr, decay, momentum)
+
+    # Average Root Mean Squared (arms) Gradients
+    arms_grads = []
+    # Average Root Mean Squared (arms) Updates
+    _momentums = []
+    for p in params:
+        arms_grad_i = theano.shared(np.zeros(p.get_value(borrow=True).shape,
+            dtype=theano.config.floatX))
+        arms_grads.append(arms_grad_i)
+        #
+        p_mom = theano.shared(np.zeros(p.get_value(borrow=True).shape,
+            dtype=theano.config.floatX))
+        _momentums.append(p_mom)
+
+    updates = OrderedDict()
+    for grad_i, arms_grad_i in zip(grads, arms_grads):
+        updates[arms_grad_i] = decay*arms_grad_i + (1-decay)*grad_i*grad_i
+
+    for param_i, grad_i, arms_grad_i, mom_i in zip(params, grads, arms_grads, _momentums):
+        delta_i = lr*grad_i/T.sqrt(updates[arms_grad_i] + eps)
+        updates[mom_i] = mom*mom_i + delta_i
+        
+        if param_i.name in kwargs:
+            up = param_i - delta_i
+            wl = T.sqrt(T.sum(T.square(up), axis=kwargs[param_i.name]) + 1e-8)
+            if kwargs[param_i.name] == 0:
+                updates[param_i] = up/wl
+            else:
+                updates[param_i] = up/wl.dimshuffle(0, 'x')
+            print "Normalized {0} along axis {1}".format(param_i.name, kwargs[param_i.name])
+        else:
+            updates[param_i] = param_i - delta_i
+    return updates
 
 def idty(x):
     return x
