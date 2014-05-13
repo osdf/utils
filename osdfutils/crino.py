@@ -424,7 +424,7 @@ def bern_xe(config, params, im):
 vae_cost_ims[bern_xe] = ('predict', 'bern_xe')
 
 
-def vae(encoder, decoder, tied=None):
+def vae(encoder, decoder, special=None, tied=None):
     """
     Variational Autoencoder. Provide information on
     _encoder_ and _decoder_ in these dictionaries.
@@ -452,7 +452,14 @@ def vae(encoder, decoder, tied=None):
     cost = cost + cost_latent
 
     # decoder needs a field 'inpt'. Its value depends on the encoder cost
+    if special is not None:
+        print "[VAE] -- special {0}".format(special)
+        intermediates[vae_handover[encoder['cost']['type']]] = \
+                special(intermediates[vae_handover[encoder['cost']['type']]])
+    
     decoder['inpt'] = vae_handover[encoder['cost']['type']]
+
+    # tieing parameters between encoder and decoder
     if tied is not None:
         decoder['tied'] = tied
 
