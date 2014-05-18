@@ -337,20 +337,8 @@ def conv(config, params, im):
                 (imshape[1] - shape[3] + 1)//pool[1])
 
     im[_tmp_name] = im[_tmp_name].flatten(2)
-    config['handover'] = (_tmp_name],)
-
-    if 'cost' in config:
-        print "[CNN -- {0}] building cost.".format(tag)
-        print "[CNN -- {0}] cost input: {1}".format(tag, _tmp_name)
-        cost_conf = config['cost']
-        cost_conf['inpt'] = _tmp_name
-
-        cost = cost_conf['type']
-        loss = cost(config=cost_conf, params=params, im=im)
-    else:
-        print "[CNN -- {0}] no loss. Is this a composite?".format(tag)
-        loss = None
-
+    config['handover'] = (_tmp_name,)
+    
     return loss
 
 
@@ -475,7 +463,7 @@ def bern_xe(config, params, im):
 vae_cost_ims[bern_xe] = ('predict', 'bern_xe')
 
 
-def vae(encoder, decoder, special=None, tied=None):
+def vae(config, special=None, tied=None):
     """
     Variational Autoencoder. Provide information on
     _encoder_ and _decoder_ in these dictionaries.
@@ -489,36 +477,39 @@ def vae(encoder, decoder, special=None, tied=None):
     x = T.matrix('inpt')
 
     # collect intermediate expressions, just in case.
-    intermediates = {'inpt': (x,)}
+    intermediates = {'enc_inpt': (x,)}
+
+    encoder = config['encoder']
+    decoder = config['decoder']
+    kl_cost = config['kl']
+    g_cost = config['cost']
 
     # collect parameters
     params = []
 
     # cost
-    cost = 0
+    intermediates['cost'] = 0
 
     enc = encoder['type']
-    encoder['inpt'] = 'inpt'
-    cost_latent = enc(config=encoder, params=params, im=intermediates)
-    cost = cost + cost_latent
+    # encoder needs a field for input -- name of 
+    # intermediate symbolic expr.
+    encoder['inpt'] = 'enc_inpt'
+    enc(config=encoder, params=params, im=intermediates)
+    assert "otpt" in encoder, "Encoder needs an output."
 
-    # decoder needs a field 'inpt'. Its value depends on the encoder cost
-    if special is not None:
-        print "[VAE] -- special {0}".format(special)
-        intermediates[vae_handover[encoder['cost']['type']]] = \
-                special(intermediates[vae_handover[encoder['cost']['type']]])
-    
-    decoder['inpt'] = vae_handover[encoder['cost']['type']]
-
-    # tieing parameters between encoder and decoder
-    if tied is not None:
-        decoder['tied'] = tied
+    kl = kl_cost['type']
+    kl_cost['inpt'] = encoder['otpt']
+    kl(config=kl, params=params, im=intermediates)
+    assert "otpt" in kl_cost, "KL_cost needs to sample an output."
 
     dec = decoder['type']
-    # add target name for decoder cost
-    decoder['cost']['trgt'] = 'inpt'
-    cost_dec = dec(config=decoder, params=params, im=intermediates)
-    cost = cost + cost_dec
+    decoder['inpt'] = kl_cost['otpt'] 
+    dec(config=decoder, params=params, im=intermediates)
+    assert "otpt" in kl_cost, "Decoder needs an output."
+
+    cost = g_cost['type']
+    g_cost['inpt'] = decoder['otpt']
+    cost(config=g_cost, params=params, im=intermediates)
 
     return cost, params, intermediates
 
