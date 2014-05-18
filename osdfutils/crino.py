@@ -196,7 +196,12 @@ def mlp(config, params, im):
     else:
         tied = {}
 
-    inpt = im[config['inpt']][0]
+    inpt = im[config['inpt']]
+
+    if type(inpt) in [list, tuple]:
+        if len(inpt) == 1:
+            print "[MLP -- {0}]: Input is a 1-list, taking first element".format(tag)
+            inpt = inpt[0]
 
     _tmp_name = config['inpt']
     for i, (shape, act) in enumerate(zip(shapes, activs)):
@@ -225,14 +230,7 @@ def mlp(config, params, im):
         _tmp_name = "{0}_layer{1}".format(tag, i)
         im[_tmp_name] = inpt
 
-    print "[MLP -- {0}] building cost.".format(tag)
-    print "[MLP -- {0}] its designated input: {1}".format(tag, _tmp_name)
-    cost_conf = config['cost']
-    cost_conf['inpt'] = _tmp_name
-
-    cost = cost_conf['type']
-    loss = cost(config=cost_conf, params=params, im=im)
-    return loss
+    config['otpt'] = _tmp_name
 
 
 def pmlp(config, params, im):
@@ -305,7 +303,8 @@ def conv(config, params, im):
     
         if init == "normal":
             print "[CNN -- {0}]: Init via Gaussian.".format(tag)
-            _tmp = initweight(shape, variant=init, {"std": 0.1}) 
+            _tmp = {"std": 0.1}
+            _tmp = initweight(shape, variant=init, **_tmp) 
         else:
             print "[CNN -- {0}]: Init via Uniform.".format(tag)
             fan_in = np.prod(shape[1:])
@@ -353,21 +352,14 @@ def composite(config, params, im):
     inpt = im[config['inpt']]
     
     for comp in components:
+        pass
 
-
-    print "[COMP -- {0}] building cost.".format(tag)
-    print "[COMP -- {0}] its designated input: {1}".format(tag, _tmp_name)
-    cost_conf = config['cost']
-    cost_conf['inpt'] = _tmp_name
-
-    cost = cost_conf['type']
-    loss = cost(config=cost_conf, params=params, im=im)
-    return loss
+    config['otpt'] = _tmp_name
 
 
 def kl_dg_g(config, params, im):
     """
-    Kullback-Leibler divergnence between diagonal
+    Kullback-Leibler divergence between diagonal
     gaussian and zero/one gaussian.
     """
     inpt = im[config['inpt']]
@@ -387,15 +379,16 @@ def kl_dg_g(config, params, im):
     gzo = rng.normal(size=mu.shape)
     # Reparameterized latent variable
     z = mu + T.sqrt(var+1e-4)*gzo
-    im['z'] = z
-    
+    im['kl_dg_g_z'] = z
+    config['otpt'] = "kl_dg_g_z"
+
     # difference to paper: gradient _descent_, minimize an upper bound
     # -> needs a negative sign
     cost = -(1 + log_var - mu_sq - var)
     cost = T.sum(cost, axis=1)
     cost = 0.5 * T.mean(cost)
     im['kl_dg_g'] = cost
-    return cost
+    im['cost'] = im['cost'] + cost
 
 
 vae_cost_ims[kl_dg_g] = ('kl_dg_g_mu', 'kl_dg_g_log_var', 'kl_dg_g')
@@ -447,7 +440,16 @@ def bern_xe(config, params, im):
     variables, needs a target.
     """
     inpt = im[config['inpt']]
+    if type(inpt) in [list, tuple]:
+        if len(inpt) == 1:
+            print "[BERNXE]: Input is a 1-list, taking first element"
+            inpt = inpt[0]
+    
     t = im[config['trgt']]
+    if type(t) in [list, tuple]:
+        if len(t) == 1:
+            print "[BERNXE]: Target is a 1-list, taking first element"
+            t = t[0]
     
     pred = T.nnet.sigmoid(inpt)
     im['predict'] = pred 
@@ -457,7 +459,7 @@ def bern_xe(config, params, im):
     cost = T.sum(cost, axis=1)
     cost = T.mean(cost)
     im['bern_xe'] = cost
-    return cost
+    im['cost'] = im['cost'] + cost
 
 
 vae_cost_ims[bern_xe] = ('predict', 'bern_xe')
@@ -477,7 +479,7 @@ def vae(config, special=None, tied=None):
     x = T.matrix('inpt')
 
     # collect intermediate expressions, just in case.
-    intermediates = {'enc_inpt': (x,)}
+    intermediates = {'inpt': (x,)}
 
     encoder = config['encoder']
     decoder = config['decoder']
@@ -493,24 +495,26 @@ def vae(config, special=None, tied=None):
     enc = encoder['type']
     # encoder needs a field for input -- name of 
     # intermediate symbolic expr.
-    encoder['inpt'] = 'enc_inpt'
+    encoder['inpt'] = 'inpt'
     enc(config=encoder, params=params, im=intermediates)
     assert "otpt" in encoder, "Encoder needs an output."
 
     kl = kl_cost['type']
     kl_cost['inpt'] = encoder['otpt']
-    kl(config=kl, params=params, im=intermediates)
+    kl(config=kl_cost, params=params, im=intermediates)
     assert "otpt" in kl_cost, "KL_cost needs to sample an output."
 
     dec = decoder['type']
     decoder['inpt'] = kl_cost['otpt'] 
     dec(config=decoder, params=params, im=intermediates)
-    assert "otpt" in kl_cost, "Decoder needs an output."
+    assert "otpt" in decoder, "Decoder needs an output."
 
     cost = g_cost['type']
     g_cost['inpt'] = decoder['otpt']
+    g_cost['trgt'] = 'inpt'
     cost(config=g_cost, params=params, im=intermediates)
 
+    cost = intermediates['cost']
     return cost, params, intermediates
 
 
