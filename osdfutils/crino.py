@@ -356,7 +356,8 @@ def composite(config, params, im):
     components = config['components']
     print "[COMP -- {0}] Composite with {1} subcomponents.".format(tag, len(components))
     
-    inpt = 'inpt'
+    inpt = config['inpt']
+    print "[COMP -- {0}] Input is {1}.".format(tag, inpt)
     for comp in components:
         assert "type" in comp, "[COMP -- {0}] Subcomponent needs 'type'.".format(tag)
         typ = comp['type']
