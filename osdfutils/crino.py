@@ -189,6 +189,9 @@ def mlp(config, params, im):
 
     assert len(shapes) == len(activs),\
             "[MLP -- {0}]: One layer, One activation.".format(tag)
+    
+    print "[MLP -- {0}]: MLP with {1} layers.".format(tag, len(shapes))
+
 
     if 'tied' in config:
         tied = config['tied']
@@ -291,8 +294,9 @@ def conv(config, params, im):
 
     imshape = config['imshape']
 
+    print "[CNN -- {0}]: CNN with {1} layers, input image {2}.".format(tag, len(shapes), imshape)
+    
     init = config["init"]
-
 
     inpt = im[config['inpt']]
     if type(inpt) in [list, tuple]:
@@ -356,13 +360,16 @@ def composite(config, params, im):
     for comp in components:
         assert "type" in comp, "[COMP -- {0}] Subcomponent needs 'type'.".format(tag)
         typ = comp['type']
+        
         _tag = comp['tag']
         comp['tag'] = "|".join([tag, _tag])
-        comp['inpt'] = 'inpt'
+        
+        comp['inpt'] = inpt
         typ(config=comp, params=params, im=im)
         
         assert "otpt" in comp, "[COMP -- {0}] Subcomponent needs 'otpt'.".format(tag)
         inpt = comp['otpt']
+    
     config['otpt'] = inpt
 
 
