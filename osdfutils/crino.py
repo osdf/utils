@@ -266,15 +266,7 @@ def pmlp(config, params, im):
         inpt = act(T.dot(inpt, _w) + _b)
         _tmp_name = "{0}_layer{1}".format(tag, i)
         im[_tmp_name] = inpt
-
-    print "[MLP -- {0}] building cost.".format(tag)
-    print "[MLP -- {0}] its designated input: {1}".format(tag, _tmp_name)
-    cost_conf = config['cost']
-    cost_conf['inpt'] = _tmp_name
-
-    cost = cost_conf['type']
-    loss = cost(config=cost_conf, params=params, im=im)
-    return loss
+    config['otpt'] = _tmp_name
 
 
 def conv(config, params, im):
@@ -372,6 +364,48 @@ def composite(config, params, im):
         inpt = comp['otpt']
     
     config['otpt'] = inpt
+
+
+def dblin(config, params, im):
+    """
+    A directed bilinear generative model.
+    See , 2011.
+    """
+    tag = config['tag']
+
+    inpt = im[config['inpt']]
+
+    assert len(inpt) == 2, "[DBLIN -- {0}]: Generative Bilinear Model needs two inputs.".format(tag)
+
+    c = inpt[0]
+    d = inpt[1]
+
+    theta = config['theta']
+    _tmp = initweight(theta, variant=config['init']['theta'])
+    theta = theano.shared(value=_tmp, borrow=True, name="theta")
+    c_theta = T.dot(c, theta)
+    im['dblin_c_theta'] = c_theta
+
+    psi = config['psi']
+    _tmp = initweight(psi, variant=config['init']['psi'])
+    psi = theano.shared(value=_tmp, borrow=True, name="psi")
+    d_psi = T.dot(d, psi)
+    im['dblin_d_psi'] = d_psi
+
+    a = c_theta * d_psi
+    im['dblin_a'] = a
+
+    act = config['activ']
+    a = act(a)
+    im['dblin_act(a)'] = a
+
+    phi = config['phi']
+    _tmp = initweight(phi, variant=config['init']['phi'])
+    phi = theano.shared(value=_tmp, borrow=True, name="phi")
+    x = T.dot(a, phi)
+    im['dblin_x'] = x
+
+    config['otpt'] = 'dblin_x'
 
 
 def kl_dg_g(config, params, im):
