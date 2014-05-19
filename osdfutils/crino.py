@@ -7,12 +7,11 @@ import theano
 import theano.tensor as T
 from collections import OrderedDict
 from theano.tensor.signal import downsample
-from theano.tensor.nnet import conv
+from theano.tensor.nnet import conv as Tconv
 
 
 # list of cost intermediates
 vae_cost_ims = {}
-vae_handover = {}
 
 
 def skmeans():
@@ -210,12 +209,12 @@ def mlp(config, params, im):
             _tied = False
             for p in params:
                 if tied[i] == p.name:
-                    print "Tieing layer {0} in {1} with {2}".format(i, tag, p.name)
+                    print "Tying layer {0} in {1} with {2}".format(i, tag, p.name)
                     _w = p.T
                     _w = _w[:shape[0], :shape[1]]
                     _tied = True
             assert _tied,\
-                    "[MLP -- {0}]: Tieing was set for layer {1}, but unfulfilled!".format(tag, i)
+                    "[MLP -- {0}]: Tying was set for layer {1}, but unfulfilled!".format(tag, i)
         else:
             _tmp = initweight(shape, variant=config["init"])
             _tmp_name = "{0}_w{1}".format(tag, i)
@@ -294,19 +293,25 @@ def conv(config, params, im):
 
     init = config["init"]
 
-    inpt = im[config['inpt']][0]
+
+    inpt = im[config['inpt']]
+    if type(inpt) in [list, tuple]:
+        if len(inpt) == 1:
+            print "[CNN -- {0}]: Input is a 1-list, taking first element".format(tag)
+            inpt = inpt[0]
+
     inpt = inpt.reshape(imshape)
     _tmp_name = config['inpt']
     for i, (shape, act, pool) in enumerate(zip(shapes, activs, pools)):
         assert imshape[1] == shape[1],\
             "[CNN -- {0}, L{1}]: Input and Shapes need to fit.".format(tag, i)
-    
+
         if init == "normal":
-            print "[CNN -- {0}]: Init via Gaussian.".format(tag)
+            print "[CNN -- {0}, L{1}]: Init shape {2} via Gaussian.".format(tag, i, shape)
             _tmp = {"std": 0.1}
             _tmp = initweight(shape, variant=init, **_tmp) 
         else:
-            print "[CNN -- {0}]: Init via Uniform.".format(tag)
+            print "[CNN -- {0}, L{1}]: Init shape {2} via Uniform.".format(tag, i, shape)
             fan_in = np.prod(shape[1:])
             fan_out = (shape[0] * np.prod(shape[2:]) / np.prod(pool))
             winit = np.sqrt(6. / (fan_in + fan_out))
@@ -315,30 +320,27 @@ def conv(config, params, im):
         _tmp_name = "{0}_cnn_w{1}".format(tag, i)
         _w = theano.shared(value=_tmp, borrow=True, name=_tmp_name)
         params.append(_w)
-        _tmp = np.zeros((shape[1],), dtype=theano.config.floatX)
+        _tmp = np.zeros((shape[0],), dtype=theano.config.floatX)
         _tmp_name = "{0}_cnn_b{1}".format(tag, i)
         _b = theano.shared(value=_tmp, borrow=True, name=_tmp_name)
         params.append(_b)
 
-        _conv = conv.conv2d(input=inpt, filters=_w, filter_shape=shape,
+        _conv = Tconv.conv2d(input=inpt, filters=_w, filter_shape=shape,
                 image_shape=imshape)
         _tmp_name = "{0}_conv_layer{1}".format(tag, i)
         im[_tmp_name] = _conv
-        
+
         _pool = downsample.max_pool_2d(input=_conv, ds=pool, ignore_border=True)
         _tmp_name = "{0}_pool_layer{1}".format(tag, i)
         im[_tmp_name] = _pool
-        
+
         inpt = act(_pool + _b.dimshuffle('x', 0, 'x', 'x'))
         _tmp_name = "{0}_cnn_layer{1}".format(tag, i)
         im[_tmp_name] = inpt
-        imshape = (imshape[0], shape[1], (imshape[0] - shape[2] + 1)//pool[0],\
-                (imshape[1] - shape[3] + 1)//pool[1])
-
+        imshape = (imshape[0], shape[0], (imshape[2] - shape[2] + 1)//pool[0],\
+                (imshape[3] - shape[3] + 1)//pool[1])
     im[_tmp_name] = im[_tmp_name].flatten(2)
-    config['handover'] = (_tmp_name,)
-    
-    return loss
+    config['otpt'] = _tmp_name
 
 
 def composite(config, params, im):
@@ -348,13 +350,20 @@ def composite(config, params, im):
     """
     tag = config['tag']
     components = config['components']
-
-    inpt = im[config['inpt']]
+    print "[COMP -- {0}] Composite with {1} subcomponents.".format(tag, len(components))
     
+    inpt = 'inpt'
     for comp in components:
-        pass
-
-    config['otpt'] = _tmp_name
+        assert "type" in comp, "[COMP -- {0}] Subcomponent needs 'type'.".format(tag)
+        typ = comp['type']
+        _tag = comp['tag']
+        comp['tag'] = "|".join([tag, _tag])
+        comp['inpt'] = 'inpt'
+        typ(config=comp, params=params, im=im)
+        
+        assert "otpt" in comp, "[COMP -- {0}] Subcomponent needs 'otpt'.".format(tag)
+        inpt = comp['otpt']
+    config['otpt'] = inpt
 
 
 def kl_dg_g(config, params, im):
@@ -392,7 +401,6 @@ def kl_dg_g(config, params, im):
 
 
 vae_cost_ims[kl_dg_g] = ('kl_dg_g_mu', 'kl_dg_g_log_var', 'kl_dg_g')
-vae_handover[kl_dg_g] = ('z',)
 
 
 def kl_dlap_lap(config, params, im):
@@ -417,19 +425,19 @@ def kl_dlap_lap(config, params, im):
     uni = rng.uniform(size=mu.shape, low=-0.5, high=0.5)
     # Reparameterized latent variable, see e.g. Wikipedia
     z = mu - b*T.sgn(uni)*T.log(1 - 2*T.abs_(uni))
-    im['z'] = z
-    
+    im['kl_dlap_lap_z'] = z
+    config['otpt'] = "kl_dlap_lap_z"
+
     # difference to paper: gradient _descent_, minimize an upper bound
     # -> needs a negative sign
     cost = -ln_b + b*T.exp(-T.abs_(mu)/b) + T.abs_(mu) - 1
     cost = T.sum(cost, axis=1)
     cost = T.mean(cost)
     im['kl_dlap_lap'] = cost
-    return cost
+    im['cost'] = im['cost'] + cost
 
 
 vae_cost_ims[kl_dlap_lap] = ('kl_dlap_lap_mu', 'kl_dlap_laplog_var', 'kl_dlap_lap')
-vae_handover[kl_dlap_lap] = ('z', )
 
 
 def bern_xe(config, params, im):
@@ -478,7 +486,7 @@ def vae(config, special=None, tied=None):
     # journey starts here:
     x = T.matrix('inpt')
 
-    # collect intermediate expressions, just in case.
+    # collect intermediate expressions
     intermediates = {'inpt': (x,)}
 
     encoder = config['encoder']
