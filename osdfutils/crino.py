@@ -346,12 +346,12 @@ def sequential(config, params, im):
     """
     tag = config['tag']
     components = config['components']
-    print "[COMP -- {0}] Composite with {1} subcomponents.".format(tag, len(components))
+    print "[SEQ -- {0}] Composite with {1} subcomponents.".format(tag, len(components))
     
     inpt = config['inpt']
-    print "[COMP -- {0}] Input is {1}.".format(tag, inpt)
+    print "[SEQ -- {0}] Input is {1}.".format(tag, inpt)
     for comp in components:
-        assert "type" in comp, "[COMP -- {0}] Subcomponent needs 'type'.".format(tag)
+        assert "type" in comp, "[SEQ -- {0}] Subcomponent needs 'type'.".format(tag)
         typ = comp['type']
         
         _tag = comp['tag']
@@ -360,7 +360,7 @@ def sequential(config, params, im):
         comp['inpt'] = inpt
         typ(config=comp, params=params, im=im)
         
-        assert "otpt" in comp, "[COMP -- {0}] Subcomponent needs 'otpt'.".format(tag)
+        assert "otpt" in comp, "[SEQ -- {0}] Subcomponent needs 'otpt'.".format(tag)
         inpt = comp['otpt']
     
     config['otpt'] = inpt
@@ -377,6 +377,8 @@ def dblin(config, params, im):
 
     assert len(inpt) == 2, "[DBLIN -- {0}]: Generative Bilinear Model needs two inputs.".format(tag)
 
+    print "[DBLIN -- {0}]: Generative Bilinear Model.".format(tag)
+
     c = im[inpt[0]]
     d = im[inpt[1]]
     if 'dactiv' in config:
@@ -389,8 +391,9 @@ def dblin(config, params, im):
     _tmp = initweight(theta, variant=config['init']['theta'])
     theta = theano.shared(value=_tmp, borrow=True, name="theta")
     params.append(theta)
-
-    c_theta = T.dot(c, theta)
+ 
+    c_theta = config['tactiv'](T.dot(c, theta))
+    print "[DBLIN -- {0}]: Activation for c_theta: {1}".format(tag, config['tactiv'])
     im['dblin_c_theta'] = c_theta
 
     # 'psi' in config -> shape of psi matrix
@@ -400,20 +403,22 @@ def dblin(config, params, im):
     psi = theano.shared(value=_tmp, borrow=True, name="psi")
     params.append(psi)
 
-    d_psi = T.dot(d, psi)
+    d_psi = config['pactiv'](T.dot(d, psi))
+    print "[DBLIN -- {0}]: Activation for d_psi: {1}".format(tag, config['pactiv'])
     im['dblin_d_psi'] = d_psi
 
     a = c_theta * d_psi
     im['dblin_a'] = a
 
     act = config['activ']
+    print "[DBLIN -- {0}]: Activation for a: {1}".format(tag, act)
     a = act(a)
     im['dblin_act(a)'] = a
 
     # bias for output
     phi = config['phi']
     _tmp = np.zeros((phi[1],), dtype=theano.config.floatX)
-    _tmp_name = "{0}_bx".format(tag, )
+    _tmp_name = "{0}_bx".format(tag)
     _b = theano.shared(value=_tmp, borrow=True, name=_tmp_name)
 
     # normalize columns from phi, already in initialization?
@@ -444,9 +449,9 @@ def kl_dg_g(config, params, im):
     log_var = inpt[:, dim:]
 
     _tmp = "{0}_kl_dg_g_mu".format(tag)
-    im[tmp] = mu
+    im[_tmp] = mu
     _tmp = "{0}_kl_dg_g_log_var".format(tag)
-    im[tmp] = log_var
+    im[_tmp] = log_var
 
     mu_sq = mu * mu
     var = T.exp(log_var)
@@ -458,7 +463,7 @@ def kl_dg_g(config, params, im):
     z = mu + T.sqrt(var+1e-4)*gzo
     _tmp = "{0}_kl_dg_g_z".format(tag)
     im[_tmp] = z
-    config['otpt'] = "kl_dg_g_z"
+    config['otpt'] = _tmp
 
     # difference to paper: gradient _descent_, minimize an upper bound
     # -> needs a negative sign
@@ -533,6 +538,10 @@ def multi_kl(config, params, im):
     otpt = []
     #
     for j, kl in enumerate(kls):
+        if 'tag' in kl:
+            kl['tag'] = "multikl-{0}-{1}".format(j, kl['tag'])
+        else:
+            kl['tag'] = "multikl-{0}".format(j)
         typ = kl['type']
         units = kl['units']
         suff = kl['suff']
