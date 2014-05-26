@@ -202,7 +202,7 @@ def mlp(config, params, im):
 
     if type(inpt) in [list, tuple]:
         if len(inpt) == 1:
-            print "[MLP -- {0}]: Input is a 1-list, taking first element".format(tag)
+            print "[MLP -- {0}]: Input is a 1-list, taking first element.".format(tag)
             inpt = inpt[0]
 
     _tmp_name = config['inpt']
@@ -293,7 +293,7 @@ def conv(config, params, im):
     inpt = im[config['inpt']]
     if type(inpt) in [list, tuple]:
         if len(inpt) == 1:
-            print "[CNN -- {0}]: Input is a 1-list, taking first element".format(tag)
+            print "[CNN -- {0}]: Input is a 1-list, taking first element.".format(tag)
             inpt = inpt[0]
 
     inpt = inpt.reshape(imshape)
@@ -339,7 +339,7 @@ def conv(config, params, im):
     config['otpt'] = _tmp_name
 
 
-def composite(config, params, im):
+def sequential(config, params, im):
     """
     A composite is a meta structure. Connect
     several models together, e.g. CNN + MLP.
@@ -373,22 +373,33 @@ def dblin(config, params, im):
     """
     tag = config['tag']
 
-    inpt = im[config['inpt']]
+    inpt = config['inpt']
 
     assert len(inpt) == 2, "[DBLIN -- {0}]: Generative Bilinear Model needs two inputs.".format(tag)
 
-    c = inpt[0]
-    d = inpt[1]
+    c = im[inpt[0]]
+    d = im[inpt[1]]
+    if 'dactiv' in config:
+        print "[DBLIN -- {0}]: Preactivation for d: {1}".format(tag, config['dactiv'])
+        activ = config['dactiv']
+        d = activ(d) 
 
+    # 'theta' == shape of theta matrix
     theta = config['theta']
     _tmp = initweight(theta, variant=config['init']['theta'])
     theta = theano.shared(value=_tmp, borrow=True, name="theta")
+    params.append(theta)
+
     c_theta = T.dot(c, theta)
     im['dblin_c_theta'] = c_theta
 
+    # 'psi' in config -> shape of psi matrix
+    # normalize rows from psi?
     psi = config['psi']
     _tmp = initweight(psi, variant=config['init']['psi'])
     psi = theano.shared(value=_tmp, borrow=True, name="psi")
+    params.append(psi)
+
     d_psi = T.dot(d, psi)
     im['dblin_d_psi'] = d_psi
 
@@ -399,11 +410,19 @@ def dblin(config, params, im):
     a = act(a)
     im['dblin_act(a)'] = a
 
+    # bias for output
     phi = config['phi']
+    _tmp = np.zeros((phi[1],), dtype=theano.config.floatX)
+    _tmp_name = "{0}_bx".format(tag, )
+    _b = theano.shared(value=_tmp, borrow=True, name=_tmp_name)
+
+    # normalize columns from phi, already in initialization?
     _tmp = initweight(phi, variant=config['init']['phi'])
     phi = theano.shared(value=_tmp, borrow=True, name="phi")
-    x = T.dot(a, phi)
+    x = T.dot(a, phi) + _b
     im['dblin_x'] = x
+    params.append(phi)
+    params.append(_b)
 
     config['otpt'] = 'dblin_x'
 
@@ -413,14 +432,21 @@ def kl_dg_g(config, params, im):
     Kullback-Leibler divergence between diagonal
     gaussian and zero/one gaussian.
     """
+    if 'tag' in config:
+        tag = config['tag']
+    else:
+        tag = ''
+
     inpt = im[config['inpt']]
 
     dim = inpt.shape[1] / 2
     mu = inpt[:, :dim]
     log_var = inpt[:, dim:]
 
-    im['kl_dg_g_mu'] = mu
-    im['kl_dg_g_log_var'] = log_var
+    _tmp = "{0}_kl_dg_g_mu".format(tag)
+    im[tmp] = mu
+    _tmp = "{0}_kl_dg_g_log_var".format(tag)
+    im[tmp] = log_var
 
     mu_sq = mu * mu
     var = T.exp(log_var)
@@ -430,7 +456,8 @@ def kl_dg_g(config, params, im):
     gzo = rng.normal(size=mu.shape)
     # Reparameterized latent variable
     z = mu + T.sqrt(var+1e-4)*gzo
-    im['kl_dg_g_z'] = z
+    _tmp = "{0}_kl_dg_g_z".format(tag)
+    im[_tmp] = z
     config['otpt'] = "kl_dg_g_z"
 
     # difference to paper: gradient _descent_, minimize an upper bound
@@ -438,7 +465,8 @@ def kl_dg_g(config, params, im):
     cost = -(1 + log_var - mu_sq - var)
     cost = T.sum(cost, axis=1)
     cost = 0.5 * T.mean(cost)
-    im['kl_dg_g'] = cost
+    _tmp = "{0}_kl_dg_g".format(tag)
+    im[_tmp] = cost
     im['cost'] = im['cost'] + cost
 
 
@@ -450,14 +478,21 @@ def kl_dlap_lap(config, params, im):
     Kullback-Leibler divergnence between diagonal
     laplacian and zero/one laplacian.
     """
+    if 'tag' in config:
+        tag = config['tag']
+    else:
+        tag = ''
+
     inpt = im[config['inpt']]
 
     dim = inpt.shape[1] / 2
     mu = inpt[:, :dim]
     ln_b = inpt[:, dim:]
 
-    im['kl_dlap_lap_mu'] = mu
-    im['kl_dlap_lap_log_b'] = ln_b
+    _tmp = "{0}_kl_dlap_lap_mu".format(tag)
+    im[_tmp] = mu
+    _tmp = "{0}_kl_dlap_lap_log_b".format(tag)
+    im[_tmp] = ln_b
 
     mu_sq = mu * mu
     b = T.exp(ln_b)
@@ -466,16 +501,18 @@ def kl_dlap_lap(config, params, im):
     # uniform -1/2;1/2
     uni = rng.uniform(size=mu.shape, low=-0.5, high=0.5)
     # Reparameterized latent variable, see e.g. Wikipedia
-    z = mu - b*T.sgn(uni)*T.log(1 - 2*T.abs_(uni))
-    im['kl_dlap_lap_z'] = z
-    config['otpt'] = "kl_dlap_lap_z"
+    z = mu - b*T.sgn(uni)*T.log(1 - 2*T.abs_(uni) + 1e-6)
+    _tmp = "{0}_kl_dlap_lap_z".format(tag)
+    im[_tmp] = z
+    config['otpt'] = _tmp 
 
     # difference to paper: gradient _descent_, minimize an upper bound
     # -> needs a negative sign
     cost = -ln_b + b*T.exp(-T.abs_(mu)/b) + T.abs_(mu) - 1
     cost = T.sum(cost, axis=1)
     cost = T.mean(cost)
-    im['kl_dlap_lap'] = cost
+    _tmp = "{0}_kl_dlap_lap".format(tag)
+    im[_tmp] = cost
     im['cost'] = im['cost'] + cost
 
 
@@ -507,7 +544,7 @@ def multi_kl(config, params, im):
         idx = idx + units*suff
     #
     print "[MULTIKL]: Total size of representation spread over {0} parts: {1}.".format(len(kls), idx)
-    config['otpt'] = otpt
+    config['otpt'] = tuple(otpt)
 
 
 def bern_xe(config, params, im):
@@ -520,13 +557,13 @@ def bern_xe(config, params, im):
     inpt = im[config['inpt']]
     if type(inpt) in [list, tuple]:
         if len(inpt) == 1:
-            print "[BERNXE]: Input is a 1-list, taking first element"
+            print "[BERNXE]: Input is a 1-list, taking first element."
             inpt = inpt[0]
     
     t = im[config['trgt']]
     if type(t) in [list, tuple]:
         if len(t) == 1:
-            print "[BERNXE]: Target is a 1-list, taking first element"
+            print "[BERNXE]: Target is a 1-list, taking first element."
             t = t[0]
     
     pred = T.nnet.sigmoid(inpt)
