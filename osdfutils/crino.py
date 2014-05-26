@@ -482,6 +482,34 @@ def kl_dlap_lap(config, params, im):
 vae_cost_ims[kl_dlap_lap] = ('kl_dlap_lap_mu', 'kl_dlap_laplog_var', 'kl_dlap_lap')
 
 
+def multi_kl(config, params, im):
+    """
+    multiple kl divergences, parallel.
+    """
+    kls = config['kls'] # the list of kl divergences.
+    print "[MULTIKL]: Combined {0} KL divergences.".format(len(kls))
+    print "[MULTIKL]: Note: Cost handling is done internally!"
+
+
+    inpt = im[config['inpt']]
+    idx = 0
+    otpt = []
+    #
+    for j, kl in enumerate(kls):
+        typ = kl['type']
+        units = kl['units']
+        suff = kl['suff']
+        _tmp = "{0}_inpt_{1}".format(j, kl['type'])
+        kl['inpt'] = _tmp
+        im[_tmp] = inpt[:, idx:idx+units*suff]
+        typ(kl, params, im)
+        otpt.append(kl['otpt'])
+        idx = idx + units*suff
+    #
+    print "[MULTIKL]: Total size of representation spread over {0} parts: {1}.".format(len(kls), idx)
+    config['otpt'] = otpt
+
+
 def bern_xe(config, params, im):
     """
     Bernoulli cross entropy.
