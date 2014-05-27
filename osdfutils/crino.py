@@ -156,10 +156,9 @@ def momntm(params, grads, **kwargs):
     """
     Optimizer: SGD with momentum.
     """
-    print "OPTIMIZER: SGD+Momentum"
     lr = kwargs['lr']
     momentum = kwargs['momentum']
-    print "lr: {0}; momentum: {1}".format(lr, momentum)
+    print "[MOMNTM] lr: {0}; momentum: {1}".format(lr, momentum)
 
     _moments = []
     for p in params:
@@ -238,32 +237,57 @@ def mlp(config, params, im):
 def pmlp(config, params, im):
     """
     A pmlp acting as an encoding or decoding layer --
-    This depends on the loss that is specified
-    in the _config_ dictionary. A 'pmlp' is a
+    a 'pmlp' is a
     MLP with product interactions
     """
     tag = config['tag']
 
     shapes = config['shapes']
     activs = config['activs']
+    noises = config['noises']
+    assert (len(shapes) == len(activs)) and (len(shapes) == len(noises)),\
+            "[PMLP -- {0}]: One layer, One activation, One noise.".format(tag)
 
-    assert len(shapes) == len(activs),\
-            "[MLP -- {0}]: One layer, One activation.".format(tag)
-
+    rng = T.shared_randomstreams.RandomStreams()
+ 
     inpt = im[config['inpt']]
 
     _tmp_name = config['inpt']
-    for i, (shape, act) in enumerate(zip(shapes, activs)):
-        # fully connected
+    for i, (shape, act, noise) in enumerate(zip(shapes, activs, noises)):
+        
+        if noise[0] == "01":
+            inpt1 = rng.binomial(size=inpt.shape, n=1, p=1.0-noise[1], dtype=theano.config.floatX) * inpt
+            inpt2 = rng.binomial(size=inpt.shape, n=1, p=1.0-noise[1], dtype=theano.config.floatX) * inpt
+        elif noise[0] == "gauss":
+            inpt1 = rng.normal(size=inpt.shape, std=noise[1], dtype=theano.config.floatX) + intp
+            inpt2 = rng.normal(size=inpt.shape, std=noise[1], dtype=theano.config.floatX) + intp
+        else:
+            assert False, "[PMLP -- {0}: Unknown noise process.".format(tag)
+        
         _tmp = initweight(shape, variant=config["init"])
-        _tmp_name = "{0}_w{1}".format(tag, i)
+        _tmp_name = "{0}_w1{1}".format(tag, i)
+        _w = theano.shared(value=_tmp, borrow=True, name=_tmp_name)
+        fac1 = T.dot(inpt1, _w)
+        params.append(_w)
+        
+        _tmp = initweight(shape, variant=config["init"])
+        _tmp_name = "{0}_w2{1}".format(tag, i)
+        _w = theano.shared(value=_tmp, borrow=True, name=_tmp_name)
+        fac2 = T.dot(inpt2, _w)
+        params.append(_w)
+
+        prod = fac1 * fac2
+        
+        _tmp = initweight(shape, variant=config["init"])
+        _tmp_name = "{0}_w3{1}".format(tag, i)
         _w = theano.shared(value=_tmp, borrow=True, name=_tmp_name)
         params.append(_w)
         _tmp = np.zeros((shape[1],), dtype=theano.config.floatX)
         _tmp_name = "{0}_b{1}".format(tag, i)
         _b = theano.shared(value=_tmp, borrow=True, name=_tmp_name)
         params.append(_b)
-        inpt = act(T.dot(inpt, _w) + _b)
+        
+        inpt = act(T.dot(prod, _w) + _b)
         _tmp_name = "{0}_layer{1}".format(tag, i)
         im[_tmp_name] = inpt
     config['otpt'] = _tmp_name
@@ -348,7 +372,6 @@ def sequential(config, params, im):
     components = config['components']
     print "[SEQ -- {0}] Sequential with {1} subcomponents.".format(tag, len(components))
 
-    normalize = config['normalize']
     inpt = config['inpt']
     print "[SEQ -- {0}] Input is {1}.".format(tag, inpt)
     for comp in components:
@@ -357,14 +380,12 @@ def sequential(config, params, im):
  
         _tag = comp['tag']
         comp['tag'] = "|".join([tag, _tag])
-        config['normalize'] = normalize
 
         comp['inpt'] = inpt
         typ(config=comp, params=params, im=im)
 
         assert "otpt" in comp, "[SEQ -- {0}] Subcomponent needs 'otpt'.".format(tag)
         inpt = comp['otpt']
-        print config['normalize']
 
     config['otpt'] = inpt
 
@@ -379,7 +400,6 @@ def parallel(config, params, im):
     components = config['components']
     print "[PAR -- {0}] Parallel with {1} subcomponents.".format(tag, len(components))
 
-    normalize = config['normalize']
     inpt = config['inpt']
     print "[PAR -- {0}] Input is {1}.".format(tag, inpt)
     for comp in components:
@@ -388,7 +408,6 @@ def parallel(config, params, im):
         
         _tag = comp['tag']
         comp['tag'] = "|".join([tag, _tag])
-        comp['normalize'] = normalize
 
         comp['inpt'] = inpt
         typ(config=comp, params=params, im=im)
@@ -397,6 +416,7 @@ def parallel(config, params, im):
         inpt = comp['otpt']
     
     config['otpt'] = inpt
+
 
 def dblin(config, params, im):
     """
@@ -434,7 +454,7 @@ def dblin(config, params, im):
     params.append(theta)
     if 'theta' in normalize:
         print "[DBLIN -- {0}]: Normalize theta along axis={1}.".format(tag, normalize['theta'])
-        config['normalize'][_tmp_name] = normalize['theta']
+        im['normalize'][_tmp_name] = normalize['theta']
  
     c_theta = config['tactiv'](T.dot(c, theta))
     print "[DBLIN -- {0}]: Activation for c_theta: {1}".format(tag, config['tactiv'])
@@ -449,7 +469,7 @@ def dblin(config, params, im):
     params.append(psi)
     if 'psi' in normalize:
         print "[DBLIN -- {0}]: Normalize psi along axis={1}.".format(tag, normalize['psi'])
-        config['normalize'][_tmp_name] = normalize['psi']
+        im['normalize'][_tmp_name] = normalize['psi']
  
     d_psi = config['pactiv'](T.dot(d, psi))
     print "[DBLIN -- {0}]: Activation for d_psi: {1}".format(tag, config['pactiv'])
@@ -478,7 +498,7 @@ def dblin(config, params, im):
     params.append(_b)
     if 'phi' in normalize:
         print "[DBLIN -- {0}]: Normalize phi along axis={1}.".format(tag, normalize['phi'])
-        config['normalize'][_tmp_name] = normalize['phi']
+        im['normalize'][_tmp_name] = normalize['phi']
  
     config['otpt'] = 'dblin_x'
 
@@ -509,7 +529,7 @@ def kl_dg_g(config, params, im):
 
     rng = T.shared_randomstreams.RandomStreams()
     # gaussian zero/one noise
-    gzo = rng.normal(size=mu.shape)
+    gzo = rng.normal(size=mu.shape, dtype=theano.config.floatX)
     # Reparameterized latent variable
     z = mu + T.sqrt(var+1e-4)*gzo
     _tmp = "{0}_kl_dg_g_z".format(tag)
@@ -555,7 +575,7 @@ def kl_dlap_lap(config, params, im):
 
     rng = T.shared_randomstreams.RandomStreams()
     # uniform -1/2;1/2
-    uni = rng.uniform(size=mu.shape, low=-0.5, high=0.5)
+    uni = rng.uniform(size=mu.shape, low=-0.5, high=0.5, dtype=theano.config.floatX)
     # Reparameterized latent variable, see e.g. Wikipedia
     z = mu - b*T.sgn(uni)*T.log(1 - 2*T.abs_(uni) + 1e-6)
     _tmp = "{0}_kl_dlap_lap_z".format(tag)
@@ -654,8 +674,7 @@ def vae(config, special=None, tied=None):
     x = T.matrix('inpt')
 
     # collect intermediate expressions
-    intermediates = {'inpt': (x,)}
-
+    intermediates = {'inpt': (x,), 'normalize': {}}
     encoder = config['encoder']
     decoder = config['decoder']
     kl_cost = config['kl']
@@ -665,7 +684,6 @@ def vae(config, special=None, tied=None):
     params = []
 
     # collect normalizations
-    normalize = {}
 
     # cost
     intermediates['cost'] = 0
@@ -674,7 +692,6 @@ def vae(config, special=None, tied=None):
     # encoder needs a field for input -- name of 
     # intermediate symbolic expr.
     encoder['inpt'] = 'inpt'
-    encoder['normalize'] = normalize
     enc(config=encoder, params=params, im=intermediates)
     assert "otpt" in encoder, "Encoder needs an output."
     
@@ -685,10 +702,8 @@ def vae(config, special=None, tied=None):
 
     dec = decoder['type']
     decoder['inpt'] = kl_cost['otpt']
-    decoder['normalize'] = normalize
     dec(config=decoder, params=params, im=intermediates)
     assert "otpt" in decoder, "Decoder needs an output."
-    normalize = decoder['normalize']
 
     cost = g_cost['type']
     g_cost['inpt'] = decoder['otpt']
@@ -696,7 +711,6 @@ def vae(config, special=None, tied=None):
     cost(config=g_cost, params=params, im=intermediates)
 
     cost = intermediates['cost']
-    config['normalize'] = normalize
     return cost, params, intermediates
 
 
