@@ -341,30 +341,62 @@ def conv(config, params, im):
 
 def sequential(config, params, im):
     """
-    A composite is a meta structure. Connect
-    several models together, e.g. CNN + MLP.
+    A sequential is a meta structure. Connect
+    several models together sequentially, e.g. CNN + MLP.
     """
     tag = config['tag']
     components = config['components']
-    print "[SEQ -- {0}] Composite with {1} subcomponents.".format(tag, len(components))
-    
+    print "[SEQ -- {0}] Sequential with {1} subcomponents.".format(tag, len(components))
+
+    normalize = config['normalize']
     inpt = config['inpt']
     print "[SEQ -- {0}] Input is {1}.".format(tag, inpt)
     for comp in components:
         assert "type" in comp, "[SEQ -- {0}] Subcomponent needs 'type'.".format(tag)
         typ = comp['type']
+ 
+        _tag = comp['tag']
+        comp['tag'] = "|".join([tag, _tag])
+        config['normalize'] = normalize
+
+        comp['inpt'] = inpt
+        typ(config=comp, params=params, im=im)
+
+        assert "otpt" in comp, "[SEQ -- {0}] Subcomponent needs 'otpt'.".format(tag)
+        inpt = comp['otpt']
+        print config['normalize']
+
+    config['otpt'] = inpt
+
+
+def parallel(config, params, im):
+    """
+    A parallel is a meta structure. Connect
+    several models together in parallel, e.g. CNN || MLP.
+    This is useful for training semi-supervised.
+    """
+    tag = config['tag']
+    components = config['components']
+    print "[PAR -- {0}] Parallel with {1} subcomponents.".format(tag, len(components))
+
+    normalize = config['normalize']
+    inpt = config['inpt']
+    print "[PAR -- {0}] Input is {1}.".format(tag, inpt)
+    for comp in components:
+        assert "type" in comp, "[PAR -- {0}] Subcomponent needs 'type'.".format(tag)
+        typ = comp['type']
         
         _tag = comp['tag']
         comp['tag'] = "|".join([tag, _tag])
-        
+        comp['normalize'] = normalize
+
         comp['inpt'] = inpt
         typ(config=comp, params=params, im=im)
         
-        assert "otpt" in comp, "[SEQ -- {0}] Subcomponent needs 'otpt'.".format(tag)
+        assert "otpt" in comp, "[PAR -- {0}] Subcomponent needs 'otpt'.".format(tag)
         inpt = comp['otpt']
     
     config['otpt'] = inpt
-
 
 def dblin(config, params, im):
     """
@@ -373,11 +405,19 @@ def dblin(config, params, im):
     """
     tag = config['tag']
 
+    # different to simple models: pass names of multiple inputs
+    # as list of strings, use these strings to access intermediates.
     inpt = config['inpt']
 
     assert len(inpt) == 2, "[DBLIN -- {0}]: Generative Bilinear Model needs two inputs.".format(tag)
 
     print "[DBLIN -- {0}]: Generative Bilinear Model.".format(tag)
+
+    if "normalize" in config:
+        print "[DBLIN -- {0}]: Normalize weights!".format(tag)
+        normalize = config['normalize']
+    else:
+        normalize = {}
 
     c = im[inpt[0]]
     d = im[inpt[1]]
@@ -389,8 +429,12 @@ def dblin(config, params, im):
     # 'theta' == shape of theta matrix
     theta = config['theta']
     _tmp = initweight(theta, variant=config['init']['theta'])
-    theta = theano.shared(value=_tmp, borrow=True, name="theta")
+    _tmp_name = "{0}_dblin-theta".format(tag)
+    theta = theano.shared(value=_tmp, borrow=True, name=_tmp_name)
     params.append(theta)
+    if 'theta' in normalize:
+        print "[DBLIN -- {0}]: Normalize theta along axis={1}.".format(tag, normalize['theta'])
+        config['normalize'][_tmp_name] = normalize['theta']
  
     c_theta = config['tactiv'](T.dot(c, theta))
     print "[DBLIN -- {0}]: Activation for c_theta: {1}".format(tag, config['tactiv'])
@@ -400,9 +444,13 @@ def dblin(config, params, im):
     # normalize rows from psi?
     psi = config['psi']
     _tmp = initweight(psi, variant=config['init']['psi'])
-    psi = theano.shared(value=_tmp, borrow=True, name="psi")
+    _tmp_name = "{0}_dblin-psi".format(tag)
+    psi = theano.shared(value=_tmp, borrow=True, name=_tmp_name)
     params.append(psi)
-
+    if 'psi' in normalize:
+        print "[DBLIN -- {0}]: Normalize psi along axis={1}.".format(tag, normalize['psi'])
+        config['normalize'][_tmp_name] = normalize['psi']
+ 
     d_psi = config['pactiv'](T.dot(d, psi))
     print "[DBLIN -- {0}]: Activation for d_psi: {1}".format(tag, config['pactiv'])
     im['dblin_d_psi'] = d_psi
@@ -421,14 +469,17 @@ def dblin(config, params, im):
     _tmp_name = "{0}_bx".format(tag)
     _b = theano.shared(value=_tmp, borrow=True, name=_tmp_name)
 
-    # normalize columns from phi, already in initialization?
     _tmp = initweight(phi, variant=config['init']['phi'])
-    phi = theano.shared(value=_tmp, borrow=True, name="phi")
+    _tmp_name = "{0}_dblin-phi".format(tag)
+    phi = theano.shared(value=_tmp, borrow=True, name=_tmp_name)
     x = T.dot(a, phi) + _b
     im['dblin_x'] = x
     params.append(phi)
     params.append(_b)
-
+    if 'phi' in normalize:
+        print "[DBLIN -- {0}]: Normalize phi along axis={1}.".format(tag, normalize['phi'])
+        config['normalize'][_tmp_name] = normalize['phi']
+ 
     config['otpt'] = 'dblin_x'
 
 
@@ -613,6 +664,9 @@ def vae(config, special=None, tied=None):
     # collect parameters
     params = []
 
+    # collect normalizations
+    normalize = {}
+
     # cost
     intermediates['cost'] = 0
 
@@ -620,18 +674,21 @@ def vae(config, special=None, tied=None):
     # encoder needs a field for input -- name of 
     # intermediate symbolic expr.
     encoder['inpt'] = 'inpt'
+    encoder['normalize'] = normalize
     enc(config=encoder, params=params, im=intermediates)
     assert "otpt" in encoder, "Encoder needs an output."
-
+    
     kl = kl_cost['type']
     kl_cost['inpt'] = encoder['otpt']
     kl(config=kl_cost, params=params, im=intermediates)
     assert "otpt" in kl_cost, "KL_cost needs to sample an output."
 
     dec = decoder['type']
-    decoder['inpt'] = kl_cost['otpt'] 
+    decoder['inpt'] = kl_cost['otpt']
+    decoder['normalize'] = normalize
     dec(config=decoder, params=params, im=intermediates)
     assert "otpt" in decoder, "Decoder needs an output."
+    normalize = decoder['normalize']
 
     cost = g_cost['type']
     g_cost['inpt'] = decoder['otpt']
@@ -639,18 +696,18 @@ def vae(config, special=None, tied=None):
     cost(config=g_cost, params=params, im=intermediates)
 
     cost = intermediates['cost']
+    config['normalize'] = normalize
     return cost, params, intermediates
 
 
-def adadelta(params, grads, **kwargs):
+def adadelta(params, grads, settings, **kwargs):
     """
     AdaDELTA, by Matthew Zeiler.
     """
     eps = 10e-8
-    print "OPTIMIZER: AdaDELTA"
-    lr = kwargs['lr']
-    decay = kwargs['decay']
-    print "lr: {0}; decay: {1}".format(lr, decay)
+    lr = settings['lr']
+    decay = settings['decay']
+    print "[AdaDELTA] lr: {0}; decay: {1}".format(lr, decay)
 
     # Average Root Mean Squared (arms) Gradients
     arms_grads = []
@@ -680,7 +737,7 @@ def adadelta(params, grads, **kwargs):
                 updates[param_i] = up/wl
             else:
                 updates[param_i] = up/wl.dimshuffle(0, 'x')
-            print "Normalized {0} along axis {1}".format(param_i.name, kwargs[param_i.name])
+            print "[AdaDELTA] Normalized {0} along axis {1}".format(param_i.name, kwargs[param_i.name])
         else:
             updates[param_i] = param_i - delta_i
     return updates
@@ -691,12 +748,11 @@ def rmsprop(params, grads, **kwargs):
     RMSprop.
     """
     eps = 10e-8
-    print "OPTIMIZER: rmsPROP"
     lr = kwargs['lr']
     decay = kwargs['decay']
     mom = kwargs['momentum']
 
-    print "lr: {0}; decay: {1}, momentum: {2}".format(lr, decay, momentum)
+    print "[RMSprop] lr: {0}; decay: {1}, momentum: {2}".format(lr, decay, momentum)
 
     # Average Root Mean Squared (arms) Gradients
     arms_grads = []
@@ -726,7 +782,7 @@ def rmsprop(params, grads, **kwargs):
                 updates[param_i] = up/wl
             else:
                 updates[param_i] = up/wl.dimshuffle(0, 'x')
-            print "Normalized {0} along axis {1}".format(param_i.name, kwargs[param_i.name])
+            print "[RMSprop] Normalized {0} along axis {1}".format(param_i.name, kwargs[param_i.name])
         else:
             updates[param_i] = param_i - delta_i
     return updates
