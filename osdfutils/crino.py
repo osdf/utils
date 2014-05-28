@@ -552,6 +552,48 @@ def kl_dg_g(config, params, im):
     im['cost'] = im['cost'] + cost
 
 
+def kl_lrg_g(config, params, im):
+    """
+    Kullback-Leibler divergence between low-rank
+    gaussian and zero/one gaussian.
+    """
+    if 'tag' in config:
+        tag = config['tag']
+    else:
+        tag = ''
+
+    inpt = im[config['inpt']]
+
+    dim = inpt.shape[1] / 2
+    mu = inpt[:, :dim]
+    log_var = inpt[:, dim:]
+
+    _tmp = "{0}_kl_dg_g_mu".format(tag)
+    im[_tmp] = mu
+    _tmp = "{0}_kl_dg_g_log_var".format(tag)
+    im[_tmp] = log_var
+
+    mu_sq = mu * mu
+    var = T.exp(log_var)
+
+    rng = T.shared_randomstreams.RandomStreams()
+    # gaussian zero/one noise
+    gzo = rng.normal(size=mu.shape, dtype=theano.config.floatX)
+    # Reparameterized latent variable
+    z = mu + T.sqrt(var+1e-4)*gzo
+    _tmp = "{0}_kl_dg_g_z".format(tag)
+    im[_tmp] = z
+    config['otpt'] = _tmp
+
+    # difference to paper: gradient _descent_, minimize an upper bound
+    # -> needs a negative sign
+    cost = -(1 + log_var - mu_sq - var)
+    cost = T.sum(cost, axis=1)
+    cost = 0.5 * T.mean(cost)
+    _tmp = "{0}_kl_dg_g".format(tag)
+    im[_tmp] = cost
+    im['cost'] = im['cost'] + cost
+
 vae_cost_ims[kl_dg_g] = ('kl_dg_g_mu', 'kl_dg_g_log_var', 'kl_dg_g')
 
 
