@@ -252,6 +252,8 @@ def pmlp(config, params, im):
  
     inpt = im[config['inpt']]
 
+    #TODO
+    #should w1 and w2 be shared?
     _tmp_name = config['inpt']
     for i, (shape, act, noise) in enumerate(zip(shapes, activs, noises)):
         
@@ -267,17 +269,21 @@ def pmlp(config, params, im):
         _tmp = initweight(shape, variant=config["init"])
         _tmp_name = "{0}_w1{1}".format(tag, i)
         _w = theano.shared(value=_tmp, borrow=True, name=_tmp_name)
+        im['normalize'][_tmp_name] = 0
+
         fac1 = T.dot(inpt1, _w)
         params.append(_w)
-        
+
         _tmp = initweight(shape, variant=config["init"])
         _tmp_name = "{0}_w2{1}".format(tag, i)
         _w = theano.shared(value=_tmp, borrow=True, name=_tmp_name)
+        im['normalize'][_tmp_name] = 0
+
         fac2 = T.dot(inpt2, _w)
         params.append(_w)
 
         prod = fac1 * fac2
-        
+
         _tmp = initweight(shape, variant=config["init"])
         _tmp_name = "{0}_w3{1}".format(tag, i)
         _w = theano.shared(value=_tmp, borrow=True, name=_tmp_name)
@@ -746,12 +752,12 @@ def adadelta(params, grads, settings, **kwargs):
         
         if param_i.name in kwargs:
             up = param_i - delta_i
-            wl = T.sqrt(T.sum(T.square(up), axis=kwargs[param_i.name]) + 1e-8)
+            wl = T.sqrt(T.sum(T.square(up), axis=kwargs[param_i.name]) + eps)
             if kwargs[param_i.name] == 0:
                 updates[param_i] = up/wl
             else:
                 updates[param_i] = up/wl.dimshuffle(0, 'x')
-            print "[AdaDELTA] Normalized {0} along axis {1}".format(param_i.name, kwargs[param_i.name])
+            print "[AdaDELTA] Normalized {0} along axis {1}, EPS={2}".format(param_i.name, kwargs[param_i.name], eps)
         else:
             updates[param_i] = param_i - delta_i
     return updates
