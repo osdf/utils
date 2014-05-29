@@ -626,6 +626,11 @@ def kl_lrg_g(config, params, im):
     """
     Kullback-Leibler divergence between low-rank
     gaussian and zero/one gaussian.
+
+    From Stochastic Back-propagation and Variational Inference in
+    Deep Latent Gaussian Models, eq. 16, eq. 17. Note that in v2
+    of the arxiv pdf, eq. 16 has a tiny sign mistake, which shows
+    in the trace computation.
     """
     if 'tag' in config:
         tag = config['tag']
@@ -636,38 +641,54 @@ def kl_lrg_g(config, params, im):
 
     dim = inpt.shape[1] / 3
     mu = inpt[:, :dim]
-    log_var = inpt[:, dim:2*dim]
+    
+    # Note: for convenience, this is the inverse of the log_var
+    # See eq. 16, the inverse is always used in the computations.
+    log_var_inv = inpt[:, dim:2*dim]
+    # 1-d direction of orientation
     u = inpt[:, 2*dim:]
 
     _tmp = "{0}_kl_dg_g_mu".format(tag)
     im[_tmp] = mu
-    _tmp = "{0}_kl_dg_g_log_var".format(tag)
-    im[_tmp] = log_var
+    _tmp = "{0}_kl_dg_g_log_var_inv".format(tag)
+    im[_tmp] = log_var_inv
     _tmp = "{0}_kl_dg_g_u".format(tag)
     im[_tmp] = u
  
     mu_sq = mu * mu
-    var = T.exp(log_var)
+    var_inv = T.exp(log_var_inv)
 
+    # get log determinant
+    # Du is D-1 * u in the paper
+    Du = var_inv * u
+    uDu = T.sum(Tu*Du, axis=1).dimshuffle(0, 'x')
+    eta = 1./(uDu + 1)
+    logDet = T.log(eta) + T.sum(T.log(var_inv), axis=1)
+
+    # get trace (use some previous computations)
+    Dusq = Du * Du
+    # the minus here is newish
+    trc =  T.sum(var_inv, axis=1) - eta*T.sum(Dusq, axis=1)
+
+    # sample
     rng = T.shared_randomstreams.RandomStreams()
     # gaussian zero/one noise
     gzo = rng.normal(size=mu.shape, dtype=theano.config.floatX)
+    trf = T.sum(u*T.sqrt(var_inv)*gzo, axis=1).dimshuffle(0, 'x')
+    gzo = T.sqrt(var_inv)*gzo - (1-T.sqrt(eta))/uDu * trf * Du
     # Reparameterized latent variable
-    z = mu + T.sqrt(var+1e-4)*gzo
+    z = mu + gzo
     _tmp = "{0}_kl_dg_g_z".format(tag)
     im[_tmp] = z
     config['otpt'] = _tmp
 
     # difference to paper: gradient _descent_, minimize an upper bound
     # -> needs a negative sign
-    cost = -(1 + log_var - mu_sq - var)
-    cost = T.sum(cost, axis=1)
+    cost = T.sum(mu_sq-1, axis=1) + trc - logDet
     cost = 0.5 * T.mean(cost)
     _tmp = "{0}_kl_dg_g".format(tag)
     im[_tmp] = cost
     im['cost'] = im['cost'] + cost
-
-vae_cost_ims[kl_dg_g] = ('kl_dg_g_mu', 'kl_dg_g_log_var', 'kl_dg_g')
 
 
 def kl_dlap_lap(config, params, im):
