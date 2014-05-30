@@ -271,7 +271,7 @@ def pmlp(config, params, im):
         else:
             assert False, "[PMLP -- {0}: Unknown noise process.".format(tag)
         
-        _tmp = initweight(shape, variant=config["init"])
+        _tmp = initweight(shape[:2], variant=config["init"])
         _tmp_name = "{0}_w1{1}".format(tag, i)
         _w = theano.shared(value=_tmp, borrow=True, name=_tmp_name)
         im['normalize'][_tmp_name] = 0
@@ -279,7 +279,7 @@ def pmlp(config, params, im):
         fac1 = T.dot(inpt1, _w)
         params.append(_w)
 
-        _tmp = initweight(shape, variant=config["init"])
+        _tmp = initweight(shape[:2], variant=config["init"])
         _tmp_name = "{0}_w2{1}".format(tag, i)
         _w = theano.shared(value=_tmp, borrow=True, name=_tmp_name)
         im['normalize'][_tmp_name] = 0
@@ -289,11 +289,11 @@ def pmlp(config, params, im):
 
         prod = fac1 * fac2
 
-        _tmp = initweight(shape, variant=config["init"])
+        _tmp = initweight(shape[1:], variant=config["init"])
         _tmp_name = "{0}_w3{1}".format(tag, i)
         _w = theano.shared(value=_tmp, borrow=True, name=_tmp_name)
         params.append(_w)
-        _tmp = np.zeros((shape[1],), dtype=theano.config.floatX)
+        _tmp = np.zeros((shape[2],), dtype=theano.config.floatX)
         _tmp_name = "{0}_b{1}".format(tag, i)
         _b = theano.shared(value=_tmp, borrow=True, name=_tmp_name)
         params.append(_b)
@@ -666,7 +666,7 @@ def kl_lrg_g(config, params, im):
     # get log determinant
     # Du is D-1 * u in the paper
     Du = var_inv * u
-    uDu = T.sum(Tu*Du, axis=1).dimshuffle(0, 'x')
+    uDu = T.sum(u*Du, axis=1).dimshuffle(0, 'x')
     eta = 1./(uDu + 1)
     logDet = T.log(eta) + T.sum(T.log(var_inv), axis=1)
 
