@@ -251,6 +251,11 @@ def pmlp(config, params, im):
     rng = T.shared_randomstreams.RandomStreams()
  
     inpt = im[config['inpt']]
+    if type(inpt) in [list, tuple]:
+        if len(inpt) == 1:
+            print "[PMLP -- {0}]: Input is a 1-list, taking first element.".format(tag)
+            inpt = inpt[0]
+
 
     #TODO
     #should w1 and w2 be shared?
@@ -670,7 +675,7 @@ def kl_lrg_g(config, params, im):
     # the minus here is newish
     trc =  T.sum(var_inv, axis=1) - eta*T.sum(Dusq, axis=1)
 
-    # sample
+    # generate samples
     rng = T.shared_randomstreams.RandomStreams()
     # gaussian zero/one noise
     gzo = rng.normal(size=mu.shape, dtype=theano.config.floatX)
