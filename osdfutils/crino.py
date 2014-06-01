@@ -483,6 +483,7 @@ def parallel(config, params, im):
 
     inpt = config['inpt']
     print "[PAR -- {0}] Input is {1}.".format(tag, inpt)
+    # TODO handle inpt correctly for parallel types.
     for comp in components:
         assert "type" in comp, "[PAR -- {0}] Subcomponent needs 'type'.".format(tag)
         typ = comp['type']
@@ -494,7 +495,6 @@ def parallel(config, params, im):
         typ(config=comp, params=params, im=im)
         
         assert "otpt" in comp, "[PAR -- {0}] Subcomponent needs 'otpt'.".format(tag)
-        inpt = comp['otpt']
     
     config['otpt'] = inpt
 
