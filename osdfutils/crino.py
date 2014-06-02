@@ -152,12 +152,14 @@ def shifts(samples, dims, shft=3):
     return shift
 
 
-def momntm(params, grads, **kwargs):
+def momntm(params, grads, settings, **kwargs):
     """
     Optimizer: SGD with momentum.
+
+    TODO: normalize along axis.
     """
-    lr = kwargs['lr']
-    momentum = kwargs['momentum']
+    lr = settings['lr']
+    momentum = settings['momentum']
     print "[MOMNTM] lr: {0}; momentum: {1}".format(lr, momentum)
 
     _moments = []
@@ -258,7 +260,7 @@ def pmlp(config, params, im):
 
 
     #TODO
-    #should w1 and w2 be shared?
+    #should w1 and w2 be shared? -> make option
     _tmp_name = config['inpt']
     for i, (shape, act, noise) in enumerate(zip(shapes, activs, noises)):
         
@@ -266,8 +268,8 @@ def pmlp(config, params, im):
             inpt1 = rng.binomial(size=inpt.shape, n=1, p=1.0-noise[1], dtype=theano.config.floatX) * inpt
             inpt2 = rng.binomial(size=inpt.shape, n=1, p=1.0-noise[1], dtype=theano.config.floatX) * inpt
         elif noise[0] == "gauss":
-            inpt1 = rng.normal(size=inpt.shape, std=noise[1], dtype=theano.config.floatX) + intp
-            inpt2 = rng.normal(size=inpt.shape, std=noise[1], dtype=theano.config.floatX) + intp
+            inpt1 = rng.normal(size=inpt.shape, std=noise[1], dtype=theano.config.floatX) + inpt
+            inpt2 = rng.normal(size=inpt.shape, std=noise[1], dtype=theano.config.floatX) + inpt
         else:
             assert False, "[PMLP -- {0}: Unknown noise process.".format(tag)
         
@@ -904,13 +906,13 @@ def adadelta(params, grads, settings, **kwargs):
     return updates
 
 
-def rmsprop(params, grads, **kwargs):
+def rmsprop(params, grads, settings, **kwargs):
     """
     RMSprop.
     """
     eps = 10e-8
-    lr = kwargs['lr']
-    decay = kwargs['decay']
+    lr = settings['lr']
+    decay = settings['decay']
     mom = kwargs['momentum']
 
     print "[RMSprop] lr: {0}; decay: {1}, momentum: {2}".format(lr, decay, momentum)
