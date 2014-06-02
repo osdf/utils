@@ -652,40 +652,57 @@ def kl_lrg_g(config, params, im):
     # Note: for convenience, this is the inverse of the log_var
     # See eq. 16, the inverse is always used in the computations.
     log_var_inv = inpt[:, dim:2*dim]
+    # avoid overflow?
+    #var_inv = inpt[:, dim:2*dim]**2
+
     # 1-d direction of orientation
     u = inpt[:, 2*dim:]
 
-    _tmp = "{0}_kl_dg_g_mu".format(tag)
+    _tmp = "{0}_kl_lrg_g_mu".format(tag)
     im[_tmp] = mu
-    _tmp = "{0}_kl_dg_g_log_var_inv".format(tag)
+    _tmp = "{0}_kl_lrg_g_log_var_inv".format(tag)
     im[_tmp] = log_var_inv
-    _tmp = "{0}_kl_dg_g_u".format(tag)
+    #_tmp = "{0}_kl_lrg_g_var_inv".format(tag)
+    #im[_tmp] = var_inv
+
+    _tmp = "{0}_kl_lrg_g_u".format(tag)
     im[_tmp] = u
  
     mu_sq = mu * mu
     var_inv = T.exp(log_var_inv)
+    #log_var_inv = T.log(var_inv+1e-8)
 
     # get log determinant
     # Du is D-1 * u in the paper
     Du = var_inv * u
     uDu = T.sum(u*Du, axis=1).dimshuffle(0, 'x')
     eta = 1./(uDu + 1)
-    logDet = T.log(eta) + T.sum(T.log(var_inv), axis=1)
+    _tmp = "{0}_kl_lrg_g_eta".format(tag)
+    im[_tmp] = eta
+    _tmp = "{0}_kl_lrg_g_logeta".format(tag)
+    im[_tmp] = T.log(eta+1e-8)
+    _tmp = "{0}_kl_lrg_g_detD".format(tag)
+    im[_tmp] = T.sum(log_var_inv, axis=1).dimshuffle(0, 'x')
+    logDet = T.log(eta) + T.sum(log_var_inv, axis=1).dimshuffle(0, 'x')
+    _tmp = "{0}_kl_lrg_g_logDet".format(tag)
+    im[_tmp] = logDet
 
     # get trace (use some previous computations)
     Dusq = Du * Du
     # the minus here is newish
-    trc =  T.sum(var_inv, axis=1) - eta*T.sum(Dusq, axis=1)
+    trc =  T.sum(var_inv, axis=1).dimshuffle(0, 'x') - eta*T.sum(Dusq, axis=1).dimshuffle(0, 'x')
+    _tmp = "{0}_kl_lrg_g_trc".format(tag)
+    im[_tmp] = trc
 
     # generate samples
     rng = T.shared_randomstreams.RandomStreams()
     # gaussian zero/one noise
     gzo = rng.normal(size=mu.shape, dtype=theano.config.floatX)
-    trf = T.sum(u*T.sqrt(var_inv)*gzo, axis=1).dimshuffle(0, 'x')
-    gzo = T.sqrt(var_inv)*gzo - (1-T.sqrt(eta))/uDu * trf * Du
+    trf = T.sum(u*T.sqrt(var_inv+1e-8)*gzo, axis=1).dimshuffle(0, 'x')
+    gzo = T.sqrt(var_inv+1e-8)*gzo - (1-T.sqrt(eta))/(uDu+1e-6) * trf * Du
     # Reparameterized latent variable
     z = mu + gzo
-    _tmp = "{0}_kl_dg_g_z".format(tag)
+    _tmp = "{0}_lrg_dg_g_z".format(tag)
     im[_tmp] = z
     config['otpt'] = _tmp
 
@@ -913,9 +930,9 @@ def rmsprop(params, grads, settings, **kwargs):
     eps = 10e-8
     lr = settings['lr']
     decay = settings['decay']
-    mom = kwargs['momentum']
+    mom = settings['momentum']
 
-    print "[RMSprop] lr: {0}; decay: {1}, momentum: {2}".format(lr, decay, momentum)
+    print "[RMSprop] lr: {0}; decay: {1}, momentum: {2}".format(lr, decay, mom)
 
     # Average Root Mean Squared (arms) Gradients
     arms_grads = []
