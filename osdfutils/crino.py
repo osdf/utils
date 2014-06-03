@@ -376,6 +376,76 @@ def conv(config, params, im):
     config['otpt'] = _tmp_name
 
 
+def pconv(config, params, im):
+    """
+    Product Convolutional encoder.
+    TODO.
+    """
+    tag = config['tag']
+
+    shapes = config['shapes']
+    activs = config['activs']
+    pools = config['pools']
+
+    assert len(shapes) == len(activs),\
+            "[PCNN -- {0}]: One layer, One activation.".format(tag)
+    assert len(shapes) == len(pools),\
+            "[PCNN -- {0}]: One layer, One Pool.".format(tag)
+
+    imshape = config['imshape']
+
+    print "[CNN -- {0}]: CNN with {1} layers, input image {2}.".format(tag, len(shapes), imshape)
+    
+    init = config["init"]
+
+    inpt = im[config['inpt']]
+    if type(inpt) in [list, tuple]:
+        if len(inpt) == 1:
+            print "[CNN -- {0}]: Input is a 1-list, taking first element.".format(tag)
+            inpt = inpt[0]
+
+    inpt = inpt.reshape(imshape)
+    _tmp_name = config['inpt']
+    for i, (shape, act, pool) in enumerate(zip(shapes, activs, pools)):
+        assert imshape[1] == shape[1],\
+            "[CNN -- {0}, L{1}]: Input and Shapes need to fit.".format(tag, i)
+
+        if init == "normal":
+            print "[CNN -- {0}, L{1}]: Init shape {2} via Gaussian.".format(tag, i, shape)
+            _tmp = {"std": 0.1}
+            _tmp = initweight(shape, variant=init, **_tmp) 
+        else:
+            print "[CNN -- {0}, L{1}]: Init shape {2} via Uniform.".format(tag, i, shape)
+            fan_in = np.prod(shape[1:])
+            fan_out = (shape[0] * np.prod(shape[2:]) / np.prod(pool))
+            winit = np.sqrt(6. / (fan_in + fan_out))
+            _tmp = np.asarray(np.random.uniform(low=-winit, high=winit,
+                size=shape), dtype=theano.config.floatX)
+        _tmp_name = "{0}_cnn_w{1}".format(tag, i)
+        _w = theano.shared(value=_tmp, borrow=True, name=_tmp_name)
+        params.append(_w)
+        _tmp = np.zeros((shape[0],), dtype=theano.config.floatX)
+        _tmp_name = "{0}_cnn_b{1}".format(tag, i)
+        _b = theano.shared(value=_tmp, borrow=True, name=_tmp_name)
+        params.append(_b)
+
+        _conv = Tconv.conv2d(input=inpt, filters=_w, filter_shape=shape,
+                image_shape=imshape)
+        _tmp_name = "{0}_conv_layer{1}".format(tag, i)
+        im[_tmp_name] = _conv
+
+        _pool = downsample.max_pool_2d(input=_conv, ds=pool, ignore_border=True)
+        _tmp_name = "{0}_pool_layer{1}".format(tag, i)
+        im[_tmp_name] = _pool
+
+        inpt = act(_pool + _b.dimshuffle('x', 0, 'x', 'x'))
+        _tmp_name = "{0}_cnn_layer{1}".format(tag, i)
+        im[_tmp_name] = inpt
+        imshape = (imshape[0], shape[0], (imshape[2] - shape[2] + 1)//pool[0],\
+                (imshape[3] - shape[3] + 1)//pool[1])
+    im[_tmp_name] = im[_tmp_name].flatten(2)
+    config['otpt'] = _tmp_name
+
 def deconv(config, params, im):
     """
     Deconvolutional stack. An experimental state.
