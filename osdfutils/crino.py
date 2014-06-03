@@ -893,6 +893,37 @@ def bern_xe(config, params, im):
     im['cost'] = im['cost'] + cost
 
 
+def g_nll(config, params, im):
+    """
+    Gaussian likelihood
+
+    Used for predicting real valued
+    variables, needs a target.
+    """
+    inpt = im[config['inpt']]
+    if type(inpt) in [list, tuple]:
+        if len(inpt) == 1:
+            print "[G_NLL]: Input is a 1-list, taking first element."
+            inpt = inpt[0]
+    
+    t = im[config['trgt']]
+    if type(t) in [list, tuple]:
+        if len(t) == 1:
+            print "[G_NLL]: Target is a 1-list, taking first element."
+            t = t[0]
+
+    scale = config['scale']
+    pred = scale*inpt
+    im['predict'] = pred 
+    # difference to paper: gradient _descent_, minimize upper bound
+    # -> needs a negative sign
+    cost = (pred - t)**2
+    cost = T.sum(cost, axis=1)
+    cost = 0.5 * T.mean(cost)
+    im['g_nll'] = cost
+    im['cost'] = im['cost'] + cost
+
+
 vae_cost_ims[bern_xe] = ('predict', 'bern_xe')
 
 
