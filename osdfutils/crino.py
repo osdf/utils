@@ -410,6 +410,7 @@ def pconv(config, params, im):
         assert imshape[1] == shape[1],\
             "[CNN -- {0}, L{1}]: Input and Shapes need to fit.".format(tag, i)
 
+        # TODO: generate two noisy inputs, see pmlp
         if init == "normal":
             print "[CNN -- {0}, L{1}]: Init shape {2} via Gaussian.".format(tag, i, shape)
             _tmp = {"std": 0.1}
