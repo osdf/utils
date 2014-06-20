@@ -925,7 +925,7 @@ def g_nll(config, params, im):
     im['cost'] = im['cost'] + cost
 
 
-def fg_nll(config, params, im):
+def dg_nll(config, params, im):
     """
     Diagonal Gaussian likelihood -- mean and variance.
 
