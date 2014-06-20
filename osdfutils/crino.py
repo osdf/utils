@@ -896,7 +896,7 @@ def bern_xe(config, params, im):
 
 def g_nll(config, params, im):
     """
-    Gaussian likelihood
+    Gaussian likelihood, fixed variance for all output dimensions.
 
     Used for predicting real valued
     variables, needs a target.
@@ -927,13 +927,18 @@ def g_nll(config, params, im):
 
 def fg_nll(config, params, im):
     """
-    Full Gaussian likelihood -- mean and variance.
-    TODO
+    Diagonal Gaussian likelihood -- mean and variance.
 
     Used for predicting real valued
-    variables, needs a target.
+    variables with individual variance, needs a target.
     """
     inpt = im[config['inpt']]
+
+    dim = inpt.shape[1] / 2
+    mu = inpt[:, :dim]
+    log_var = inpt[:, dim:]
+    var = T.exp(log_var)
+
     if type(inpt) in [list, tuple]:
         if len(inpt) == 1:
             print "[G_NLL]: Input is a 1-list, taking first element."
@@ -946,14 +951,14 @@ def fg_nll(config, params, im):
             t = t[0]
 
     scale = config['scale']
-    pred = scale*inpt
+    pred = scale*mu
     im['predict'] = pred 
     # difference to paper: gradient _descent_, minimize upper bound
     # -> needs a negative sign
-    cost = (pred - t)**2
-    cost = T.sum(cost, axis=1)
-    cost = 0.5 * T.mean(cost)
-    im['g_nll'] = cost
+    cost = ((pred - t)**2)/var 
+    cost = 0.5*T.sum(cost, axis=1) - dim/2*T.log(2*np.pi) - T.sum(var, axis=1) 
+    cost = T.mean(cost)
+    im['fg_nll'] = cost
     im['cost'] = im['cost'] + cost
 
 
