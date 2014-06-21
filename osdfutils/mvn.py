@@ -12,7 +12,7 @@ def contour_2d(mu, cov=None, prec=None,
     Note:
     sqrt(6) covers roughly 95% of probability
     mass (in 2d), given the fact that the mahalanobis
-    distribution is chi-squared distributed.
+    distance is chi-squared distributed.
     """
     mu = mu.reshape(2,1) 
     t = np.linspace(0, 2*np.pi, n)
