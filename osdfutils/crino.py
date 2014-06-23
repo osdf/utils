@@ -27,7 +27,7 @@ def skmeans():
     grads = T.grad(cost, W)
 
 
-def sae():
+def sae(activ):
     """
     synchronous autoencoder.
     """
@@ -35,7 +35,9 @@ def sae():
     W = theano.shared(np.asarray(Winit, dtype=theano.config.floatX),
         borrow=True, name='W')
     h = T.dot(x, W)
-    sh = h*h
+    sh = activ(h*h)
+    cae = T.grad(sh.mean(axis=0).sum(), x)
+    
     rec = T.sum(x - T.dot(sh*h, W.T), axis=1)
     cost = T.mean(rec)
     grads = T.grad(cost, W)
