@@ -27,20 +27,39 @@ def skmeans():
     grads = T.grad(cost, W)
 
 
-def sae(activ):
+def sae(shape, activ, lmbd, init='uniform'):
     """
-    synchronous autoencoder.
+    Synchronous autoencoder for motion, see 
+    Learning to encode motion using spatio-temporal synchrony
+    Konda,K., Memisevic, R., Michalski, V.
+    eq. 20
+
+    _shape_ is the shape of the weight matrix.
+    _activ_ is the hidden activation fct.
+    _lmbd_ is the weighting of the contractive penalty.
     """
     x = T.matrix('x')
-    W = theano.shared(np.asarray(Winit, dtype=theano.config.floatX),
-        borrow=True, name='W')
+    wi = initweight(shape, variant=init)
+    W = theano.shared(wi, borrow=True, name='W')
+    #_b = np.zeros((shape[0],), dtype=theano.config.floatX)
+    #b1 = theano.shared(value=_b, borrow=True)
+
     h = T.dot(x, W)
     sh = activ(h*h)
-    cae = T.grad(sh.mean(axis=0).sum(), x)
     
-    rec = T.sum(x - T.dot(sh*h, W.T), axis=1)
-    cost = T.mean(rec)
-    grads = T.grad(cost, W)
+    cae = T.grad(T.sum(T.mean(sh, axis=0)), h)
+    cae = T.sum( T.mean(cae*cae, axis=0) * T.sum(T.sqr(W), axis=0) )
+    
+    _b = np.zeros((shape[0],), dtype=theano.config.floatX)
+    b1 = theano.shared(value=_b, borrow=True)
+    xhat = T.dot(sh*h, W.T) + b1
+    
+    rec = T.sum( (x - xhat)**2, axis=1 )
+    cost = T.mean(rec) + lmbd * cae
+
+    params = (W, b1)
+    grads = T.grad(cost, params)
+    return params, cost, grads, x
 
 
 def zbae(Winit, activ='TRec', theta=1.):
@@ -109,8 +128,10 @@ def initweight(shape, variant="normal", **kwargs):
         weights = np.asarray(np.random.normal(loc=0, scale=std, size=shape),
                 dtype=theano.config.floatX)
     elif variant is "uniform":
-        fan_in = kwargs["fan_in"]
-        fan_out = kwargs["fan_out"] 
+        units = shape[0]*shape[1]
+        bound = 4*np.sqrt(6./units)
+        weights = np.asarray(np.uniform(low=-bound, high=bound, size=shape),
+                dtype=theano.config.floatX)
     elif variant is "sparse":
         sparsity = kwargs["sparsity"]
         weights = np.zeroes(shape, dtype=theano.config.floatX)
