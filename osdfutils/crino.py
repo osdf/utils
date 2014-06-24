@@ -1042,6 +1042,53 @@ def vae(config, special=None, tied=None):
     return cost, params, intermediates
 
 
+def semi_vae(config, special=None, tied=None):
+    """
+    """
+    # journey starts here:
+    x = T.matrix('inpt')
+
+    # collect intermediate expressions
+    intermediates = {'inpt': (x,), 'normalize': {}}
+    encoder = config['encoder']
+    decoder = config['decoder']
+    kl_cost = config['kl']
+    g_cost = config['cost']
+
+    # collect parameters
+    params = []
+
+    # collect normalizations
+
+    # cost
+    intermediates['cost'] = 0
+
+    enc = encoder['type']
+    # encoder needs a field for input -- name of 
+    # intermediate symbolic expr.
+    encoder['inpt'] = 'inpt'
+    enc(config=encoder, params=params, im=intermediates)
+    assert "otpt" in encoder, "Encoder needs an output."
+    
+    kl = kl_cost['type']
+    kl_cost['inpt'] = encoder['otpt']
+    kl(config=kl_cost, params=params, im=intermediates)
+    assert "otpt" in kl_cost, "KL_cost needs to sample an output."
+
+    dec = decoder['type']
+    decoder['inpt'] = kl_cost['otpt']
+    dec(config=decoder, params=params, im=intermediates)
+    assert "otpt" in decoder, "Decoder needs an output."
+
+    cost = g_cost['type']
+    g_cost['inpt'] = decoder['otpt']
+    g_cost['trgt'] = 'inpt'
+    cost(config=g_cost, params=params, im=intermediates)
+
+    cost = intermediates['cost']
+    return cost, params, intermediates
+
+
 def adadelta(params, grads, settings, **kwargs):
     """
     AdaDELTA, by Matthew Zeiler.
