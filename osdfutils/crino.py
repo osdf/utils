@@ -470,6 +470,7 @@ def pconv(config, params, im):
     im[_tmp_name] = im[_tmp_name].flatten(2)
     config['otpt'] = _tmp_name
 
+
 def deconv(config, params, im):
     """
     Deconvolutional stack. An experimental state.
@@ -937,11 +938,15 @@ def g_nll(config, params, im):
             t = t[0]
 
     scale = config['scale']
+    if 'sigma' in config:
+        sigma = config['sigma']
+    else:
+        sigma = 1
     pred = scale*inpt
     im['predict'] = pred 
     # difference to paper: gradient _descent_, minimize upper bound
     # -> needs a negative sign
-    cost = (pred - t)**2
+    cost = ((pred - t)/sigma 	)**2
     cost = T.sum(cost, axis=1)
     cost = 0.5 * T.mean(cost)
     im['g_nll'] = cost
@@ -975,13 +980,14 @@ def dg_nll(config, params, im):
 
     scale = config['scale']
     pred = scale*mu
-    im['predict'] = pred 
+    im['predict'] = pred
+    im['log_var'] = log_var
     # difference to paper: gradient _descent_, minimize upper bound
     # -> needs a negative sign
     cost = ((pred - t)**2)/var 
-    cost = 0.5*T.sum(cost, axis=1) + dim/2*T.log(2*np.pi) + T.sum(log_var, axis=1) 
+    cost = 0.5*T.sum(cost, axis=1) + dim/2.*T.log(2*np.pi) + T.sum(log_var, axis=1) 
     cost = T.mean(cost)
-    im['fg_nll'] = cost
+    im['dg_nll'] = cost
     im['cost'] = im['cost'] + cost
 
 
