@@ -8,6 +8,7 @@ import theano.tensor as T
 from collections import OrderedDict
 from theano.tensor.signal import downsample
 from theano.tensor.nnet import conv as Tconv
+from misc import logsumexp
 
 
 # list of cost intermediates
@@ -1012,6 +1013,9 @@ def log_p_x_dg_logvar(x, mu, logvar):
     return const + logvar/2 + (x - mu)**2 / (2 * T.exp(logvar))
 
 
+# example usage with digaonal gauss KL ('ims' are intermediates from vae)
+# params = [ims['_kl_dg_g_mu'], ims['_kl_dg_g_log_var']]
+# res = estimate_lkh(data[:1000], 500, ims['inpt'][0], ims['_kl_dg_g_z'], ims['neg_log_like_per_sampel'], params, ll_diag_gauss_logvar, [0, 1])
 def estimate_lk(samples, x, z_x, x_z, ims):
     """
     """
@@ -1021,6 +1025,24 @@ def estimate_lk(samples, x, z_x, x_z, ims):
 
 
 vae_cost_ims[bern_xe] = ('predict', 'bern_xe')
+
+
+def estimate_lkh(data, no_mcs, inpts, z_samples, ncll_x_z, params, pz, prior):
+    z_smpls = theano.function([inpts], z_samples)
+    params = theano.function([inpts], params)
+    ncll_x_z = theano.function([inpts, z_samples], ncll_x_z)
+    mc_ll = np.zeros((no_mcs, data.shape[0]))
+    for i in xrange(no_mcs):
+        zs = z_smpls(data)
+        pars = params(data)
+        ll_z_x = pz(zs, *pars).sum(axis=1)
+        ll_z = pz(zs, *prior).sum(axis=1)
+        ll_x_z = -ncll_x_z(data, zs).sum(axis=1)
+        ll_xz = ll_x_z + ll_z - ll_z_x
+        mc_ll[i, :] = ll_xz
+    ll = logsumexp(mc_ll, axis=0) - np.log(no_mcs)
+    #ll = np.exp(ll).mean()
+    return ll.mean(), ll.std()
 
 
 def vae(config, special=None, tied=None):
@@ -1210,6 +1232,7 @@ def rmsprop(params, grads, settings, **kwargs):
         else:
             updates[param_i] = param_i - delta_i
     return updates
+
 
 def idty(x):
     return x
