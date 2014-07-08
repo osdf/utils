@@ -911,7 +911,9 @@ def bern_xe(config, params, im):
     im['predict'] = pred 
     # difference to paper: gradient _descent_, minimize upper bound
     # -> needs a negative sign
+    #cost= -T.nnet.binary_crossentropy(pred, t)
     cost = -(t*T.log(pred + 1e-4) + (1-t)*T.log(1-pred + 1e-4))
+    im['neg_log_like_per_sampel'] = cost
     cost = T.sum(cost, axis=1)
     cost = T.mean(cost)
     im['bern_xe'] = cost
@@ -989,6 +991,33 @@ def dg_nll(config, params, im):
     cost = T.mean(cost)
     im['dg_nll'] = cost
     im['cost'] = im['cost'] + cost
+
+
+def log_p_x_given_y(nll, x, y):
+    """
+    negative log likelihood of x given z.
+    Returned function produces matrix!
+    """
+    return theano.function([x, y], nll)
+
+
+def log_p_x_dg_logvar(x, mu, logvar):
+    """
+    negative log-likelihood of x under
+    diagonal gaussian with mean mu and
+    logvariance logvar.
+    This is a theano expression!
+    """
+    const = 0.5 * np.log(2*np.pi)
+    return const + logvar/2 + (x - mu)**2 / (2 * T.exp(logvar))
+
+
+def estimate_lk(samples, x, z_x, x_z, ims):
+    """
+    """
+    logpxz = log_p_x_given_y(x_z, x, z)
+    logz = log_p_x_dg_logvar(z_sampled, mu, logvar)
+    logzx = log_p_x_given_y(z_x, z, x)
 
 
 vae_cost_ims[bern_xe] = ('predict', 'bern_xe')
