@@ -999,8 +999,9 @@ vae_cost_ims[bern_xe] = ('predict', 'bern_xe')
 
 # example usage with digaonal gauss KL ('ims' are intermediates from vae)
 # params = [ims['_kl_dg_g_mu'], ims['_kl_dg_g_log_var']]
-# res = estimate_lkh(data[:1000], 500, ims['inpt'][0], ims['_kl_dg_g_z'], ims['neg_log_like_per_sampel'], params, ll_diag_gauss_logvar, [0, 1])
-def estimate_lkh(data, no_mcs, inpts, z_samples, ncll_x_z, params, 
+# res = estimate_ll(data[:1000], 500, ims['inpt'][0], ims['_kl_dg_g_z'], ims['neg_log_like_per_sampel'], params, ll_diag_gauss_logvar, [0, 0])
+# Note: pz is ll_diag_gauss_logvar, using log variance -> params are 0 and _0_!
+def estimate_ll(data, no_mcs, inpts, z_samples, ncll_x_z, params, 
         pz, prior):
     """Estimate loglikelihood of samples in _data_, using _no_mcs_
     many importance samples from proposal distribution _pz_. _pz_
@@ -1014,9 +1015,9 @@ def estimate_lkh(data, no_mcs, inpts, z_samples, ncll_x_z, params,
     negative loglikelihood of x given z (z representing the latents
     of the graphical model).
     """
-    z_smpls = theano.function([inpts], z_samples)
-    params = theano.function([inpts], params)
-    ncll_x_z = theano.function([inpts, z_samples], ncll_x_z)
+    z_smpls = theano.function([inpts], z_samples, allow_input_downcast=True)
+    params = theano.function([inpts], params, allow_input_downcast=True)
+    ncll_x_z = theano.function([inpts, z_samples], ncll_x_z, allow_input_downcast=True)
     mc_ll = np.zeros((no_mcs, data.shape[0]))
     for i in xrange(no_mcs):
         zs = z_smpls(data)
@@ -1027,8 +1028,7 @@ def estimate_lkh(data, no_mcs, inpts, z_samples, ncll_x_z, params,
         ll_xz = ll_x_z + ll_z - ll_z_x
         mc_ll[i, :] = ll_xz
     ll = logsumexp(mc_ll, axis=0) - np.log(no_mcs)
-    #ll = np.exp(ll).mean()
-    return ll.mean(), ll.std()
+    return ll.mean()
 
 
 # estimating loglikelihood per row of samples x from diagonal gauss, with
