@@ -994,40 +994,26 @@ def dg_nll(config, params, im):
     im['cost'] = im['cost'] + cost
 
 
-def log_p_x_given_y(nll, x, y):
-    """
-    negative log likelihood of x given z.
-    Returned function produces matrix!
-    """
-    return theano.function([x, y], nll)
-
-
-def log_p_x_dg_logvar(x, mu, logvar):
-    """
-    negative log-likelihood of x under
-    diagonal gaussian with mean mu and
-    logvariance logvar.
-    This is a theano expression!
-    """
-    const = 0.5 * np.log(2*np.pi)
-    return const + logvar/2 + (x - mu)**2 / (2 * T.exp(logvar))
+vae_cost_ims[bern_xe] = ('predict', 'bern_xe')
 
 
 # example usage with digaonal gauss KL ('ims' are intermediates from vae)
 # params = [ims['_kl_dg_g_mu'], ims['_kl_dg_g_log_var']]
 # res = estimate_lkh(data[:1000], 500, ims['inpt'][0], ims['_kl_dg_g_z'], ims['neg_log_like_per_sampel'], params, ll_diag_gauss_logvar, [0, 1])
-def estimate_lk(samples, x, z_x, x_z, ims):
+def estimate_lkh(data, no_mcs, inpts, z_samples, ncll_x_z, params, 
+        pz, prior):
+    """Estimate loglikelihood of samples in _data_, using _no_mcs_
+    many importance samples from proposal distribution _pz_. _pz_
+    has parameters -- for the posterior approximation these are in
+    _params_ (theano expression per parameter), for the prior these
+    are in _prior_ (e.g. simply [0, 1] for a standard normal).
+    _inpts_ is a theano expression for the input of the VAE,
+    _z_samples_ is a theano expression for generating samples from
+    the proposal distribution given _inpts_ (_z_samples_ and _pz_ 
+    must be matching), _ncll_x_z_ is a theano expression of the
+    negative loglikelihood of x given z (z representing the latents
+    of the graphical model).
     """
-    """
-    logpxz = log_p_x_given_y(x_z, x, z)
-    logz = log_p_x_dg_logvar(z_sampled, mu, logvar)
-    logzx = log_p_x_given_y(z_x, z, x)
-
-
-vae_cost_ims[bern_xe] = ('predict', 'bern_xe')
-
-
-def estimate_lkh(data, no_mcs, inpts, z_samples, ncll_x_z, params, pz, prior):
     z_smpls = theano.function([inpts], z_samples)
     params = theano.function([inpts], params)
     ncll_x_z = theano.function([inpts, z_samples], ncll_x_z)
