@@ -1031,6 +1031,14 @@ def estimate_lkh(data, no_mcs, inpts, z_samples, ncll_x_z, params,
     return ll.mean(), ll.std()
 
 
+# estimating loglikelihood per row of samples x from diagonal gauss, with
+# parameters mu (mean) and logvar (variance in log). 
+# Needs to sum of axis=1 to get the estimate for one sample (a row) in x.
+def ll_diag_gauss_logvar(x, mu, logvar):
+    const = -np.log(2*np.pi)/2
+    return const -logvar/2 - (x - mu)**2 / (2 * np.exp(logvar))
+
+
 def vae(config, special=None, tied=None):
     """
     Variational Autoencoder. Provide information on
