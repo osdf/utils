@@ -11,9 +11,6 @@ from theano.tensor.nnet import conv as Tconv
 from misc import logsumexp
 
 
-# list of cost intermediates
-vae_cost_ims = {}
-
 
 def skmeans():
     """
@@ -854,7 +851,28 @@ def kl_dlap_lap(config, params, im):
     im['cost'] = im['cost'] + cost
 
 
-vae_cost_ims[kl_dlap_lap] = ('kl_dlap_lap_mu', 'kl_dlap_laplog_var', 'kl_dlap_lap')
+def rim(config, params, im):
+    """
+    """
+    if 'tag' in config:
+        tag = config['tag']
+    else:
+        tag = ''
+
+    inpt = im[config['inpt']]
+
+    # conditional entropy
+    cond_entropy = -inpt * T.log(inpt).sum(axis=1)
+    cond_entropy = cond_entropy.mean()
+
+    # marginal entropy
+    marginal = inpt.mean(axis=0)
+    entropy = -marginal * T.log(marginal).sum(axis=1)
+    entropy = entropy.mean()
+
+    # minimize negative mutual information
+    cost = cond_entropy - entropy
+    im['cost'] = im['cost'] + cost
 
 
 def multi_kl(config, params, im):
@@ -993,8 +1011,6 @@ def dg_nll(config, params, im):
     im['dg_nll'] = cost
     im['cost'] = im['cost'] + cost
 
-
-vae_cost_ims[bern_xe] = ('predict', 'bern_xe')
 
 
 # example usage with digaonal gauss KL ('ims' are intermediates from vae)
