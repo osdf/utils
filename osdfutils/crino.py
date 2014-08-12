@@ -246,6 +246,7 @@ def momntm(params, grads, settings, **kwargs):
 
     for param_i, mom_i in zip(params, _moments):
             updates[param_i] = param_i - updates[mom_i]
+
     return updates
 
 
@@ -259,9 +260,9 @@ def norm_updt(params, updates, todo):
             print "[NORM_UPDT] {0} normalized to {1} along axis {2}".format(p.name, const, axis)
             wl = T.sqrt(T.sum(T.square(updates[p]), axis=axis) + 1e-6)
             if axis == 0:
-                updates[p] = updates[p]/wl
+                updates[p] = const * updates[p]/wl
             else:
-                updates[p] = updates[p]/wl.dimshuffle(0, 'x')
+                updates[p] = const * updates[p]/wl.dimshuffle(0, 'x')
     return updates
 
 
@@ -270,9 +271,9 @@ def max_updt(params, updates, todo):
     """
     for p in params:
         if p.name in todo:
-            const = todo[p.name]['c']
-            print "[MAX_UPDT] {0} at least at {1}".format(p.name, const, axis)
-            updates[p] = T.maximum(const, updates[p])
+            thresh = todo[p.name]['thresh']
+            print "[MAX_UPDT] {0} at least at {1}".format(p.name, thresh)
+            updates[p] = T.maximum(thresh, updates[p])
     return updates
 
 
