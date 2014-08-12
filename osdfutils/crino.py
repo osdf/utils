@@ -114,6 +114,59 @@ def test_zbae(hidden, indim, epochs, lr, momentum, btsz, batches,
     return params
 
 
+def sh(x, theta):
+    """Simple shrinkage function.
+    """
+    return T.sgn(x) * T.maximum(0, T.abs_(x) - theta)
+
+
+def lista(config, shrinkage):
+    """Learned ISTA by Gregor/Lecun.
+
+    Returns x, params, cost, grads
+    """
+    layers = config['layers']
+    sp_lmbd = config['lambda']
+    L = config['L']
+    Dinit = config['D']
+    
+    x = T.matrix('x')
+    
+    # D for dictionary
+    _D = initweight(**Dinit)
+    # normalize atoms of dictionary (== rows) to length 1
+    _d = np.sqrt(np.sum(_D * _D, axis=1))
+    _D /= np.atleast_2d(_d).T
+    D = theano.shared(value=np.asarray(_D, dtype=theano.config.floatX),
+            borrow=True, name='D')
+
+    _S = np.eye(_D.shape[0]) - 1./L * np.dot(_D ,_D.T)
+    S = theano.shared(value=np.asarray(_S, dtype=theano.config.floatX),
+            borrow=True, name='S')
+    
+    _theta = np.abs(np.random.randn(_S.shape[0],))
+    theta = theano.shared(value=np.asarray(_theta, dtype=theano.config.floatX),
+            borrow=True, name="theta")
+    
+    L = theano.shared(value=np.asarray(L, dtype=theano.config.floatX),
+            borrow=True, name="L")
+
+    params = (D, S, theta, L)
+    
+    b = T.dot(x, D.T)
+    z = shrinkage(b, theta)
+    for i in range(layers):
+        c = b + T.dot(z, S)
+        z = shrinkage(c, theta)
+
+
+    rec = T.dot(z, L * D)
+    cost = T.mean(T.sum((x - rec)**2, axis=1))
+    sparsity = T.mean(T.sum(T.abs_(z), axis=1))
+    cost = cost + sp_lmbd * sparsity
+    return x, params, cost, rec, z
+
+   
 def initweight(shape, variant="normal", **kwargs):
     """
     Init weights.
@@ -176,8 +229,6 @@ def shifts(samples, dims, shft=3):
 def momntm(params, grads, settings, **kwargs):
     """
     Optimizer: SGD with momentum.
-
-    TODO: normalize along axis.
     """
     lr = settings['lr']
     momentum = settings['momentum']
@@ -195,6 +246,33 @@ def momntm(params, grads, settings, **kwargs):
 
     for param_i, mom_i in zip(params, _moments):
             updates[param_i] = param_i - updates[mom_i]
+    return updates
+
+
+def norm_updt(params, updates, todo):
+    """Normalize updates wrt length.
+    """
+    for p in params:
+        if p.name in todo:
+            axis = todo[p.name]['axis']
+            const = todo[p.name]['c']
+            print "[NORM_UPDT] {0} normalized to {1} along axis {2}".format(p.name, const, axis)
+            wl = T.sqrt(T.sum(T.square(updates[p]), axis=axis) + 1e-6)
+            if axis == 0:
+                updates[p] = updates[p]/wl
+            else:
+                updates[p] = updates[p]/wl.dimshuffle(0, 'x')
+    return updates
+
+
+def max_updt(params, updates, todo):
+    """Normalize updates wrt to minum value.
+    """
+    for p in params:
+        if p.name in todo:
+            const = todo[p.name]['c']
+            print "[MAX_UPDT] {0} at least at {1}".format(p.name, const, axis)
+            updates[p] = T.maximum(const, updates[p])
     return updates
 
 
