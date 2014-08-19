@@ -227,7 +227,7 @@ def lcod(config, shrinkage):
 #
 #    Returns x, params, cost, grads
 #    """
-#    print "[LCoD]"
+#    print "[BCoFB]"
 #    layers = config['layers']
 #    sp_lmbd = config['lambda']
 #    L = config['L']
@@ -255,18 +255,29 @@ def lcod(config, shrinkage):
 #            borrow=True, name="L")
 #
 #    params = (D, S, theta, L)
+#
+#    # local defs
+#    def pnorms(idx1, idx2, x):
+#        return T.sum(x[:, idx1:idx2]**2, axis=1)
+#
+#    def subdot(idx, e , idx1, idx2, S):
+#        return T.dot(S[:, idx1[idx]:idx2[idx]], e[idx1[idx]:idx2[idx]].T).T
 #    
+#    def subtens(z,y,g,lower,upper): 
+#        return T.set_subtensor( z[lower[g]:upper[g]] , y[lower[g]:upper[g]])
 #    b = T.dot(x, D.T)
 #    z = 0
 #    for i in range(layers):
-#        znew = shrinkage(b, theta)
-#        e = T.abs_(znew - z)
-#        k = T.argmax(e, axis=1)
-#        e = znew - z
-#        e = e[T.arange(e.shape[0]), k]
-#        Sjk = S[:, k].T
-#        b = b + Sjk* e.dimshuffle(0, 'x')
-#        z = znew 
+#        y = None
+#        e = y - z
+#        
+#        norms, _updt = theano.map(pnorms, sequences[lower, upper], non_sequences=[e])
+#        g = T.argmax(norms.T, axis=1)
+#
+#        delta_b, _updt = theano.map(subdot, sequences=[g, e], non_sequences=[lower, upper, S])
+#        b = b + delta_b
+#
+#        z, _updt = theano.map(subtens, sequences=[z, y, g], non_sequences=[lower, upper])
 #    z = shrinkage(b, theta)
 #
 #    rec = T.dot(z, L * D)
