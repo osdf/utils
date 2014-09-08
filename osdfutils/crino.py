@@ -184,8 +184,8 @@ def lcod(config, shrinkage):
     # D for dictionary
     _D = initweight(**Dinit)
     # normalize atoms of dictionary (== rows) to length 1
-    _d = np.sqrt(np.sum(_D * _D, axis=1))
-    _D /= np.atleast_2d(_d).T
+    _d = np.sqrt(np.sum(_D * _D, axis=1, keepdims=True))
+    _D /= _d
     D = theano.shared(value=np.asarray(_D, dtype=theano.config.floatX),
             borrow=True, name='D')
 
@@ -285,6 +285,74 @@ def lcod(config, shrinkage):
 #    sparsity = T.mean(T.sum(T.abs_(z), axis=1))
 #    cost = cost + sp_lmbd * sparsity
 #    return x, params, cost, rec, z
+
+
+def lconvista(config, shrinkage):
+    """Learned Convolutional ISTA   
+
+    See github.com/msoelch/FastApproximations.
+    """
+    print "[LConvISTA]"
+
+    layers = config['layers']
+    btsz = config['btsz']
+    
+    Dinit = config['D'] 
+    _D = initweight(**Dinit)
+    _d = np.sqrt(np.sum(_D * _D, axis=1, keepdims=True))
+    _D /= _d
+    _D = _D.reshape(Dinit["tensor"])
+    D = theano.shared(value=np.asarray(_D, 
+            dtype=theano.config.floatX),borrow=True,name='D')
+    _theta = config['theta']
+    theta = theano.shared(value=np.asarray(_theta, 
+            dtype=theano.config.floatX),borrow=True,name="theta")
+    _L = config['L']
+    L = theano.shared(value=np.asarray(_L, 
+            dtype=theano.config.floatX),borrow=True,name="L")
+
+    params = [D, theta, L]
+
+    #filter shape information for speed up of convolution
+    fs1 = _D.shape
+    fs2 = (fs1[1],fs1[0],fs1[2],fs1[3])
+
+    imshape = config['imshape']
+    x = T.matrix('x')
+    x = x.reshape(imshape)
+    
+    z = T.zeros(config['zshape'], dtype=theano.config.floatX)
+
+    # The combination of for loop and 'hand calculated' gradient was tested
+    # on CPU with 2 layers and 16 filters as well as 5 layers and 49 filters.
+    # Note though that T.grad catches up with increasing parameters.
+    # Hand calculated grad is preferred due to higher flexibility. 
+    for i in range(layers):
+        deconv = conv(z, D, border_mode='valid', 
+                image_shape=config['zshape'], filter_shape=fs1) 
+        gradZ = conv(deconv  - x, D[:,:,::-1,::-1].dimshuffle(1,0,2,3),
+                border_mode='full', image_shape=config['imshape'],
+                filter_shape=fs2)
+        gradZ = gradZ/btsz
+        z = shrinkage(Z - 1/L * gradZ, theta)
+
+
+    def rec_error(_x, _z, D):
+        # Calculates the reconstruction rec_i = sum_j Z_ij * D_j
+        # and the corresponding (mean) square reconstruction error
+        # rec_error = (X_i - rec_i) ** 2
+
+        rec = conv(_z, D, border_mode='valid', image_shape=config['zshape'],
+                filter_shape=_D.shape) 
+        error = 0.5*T.mean( ((x - rec)**2).sum(axis=-1).sum(axis=-1))
+        return error, rec
+
+
+    sparsity = T.mean(T.sum(T.sum(T.abs_(Z),axis=-1),axis=-1))
+    rec_err, rec = rec_error(X,Z,D)    
+
+    cost = rec_err + lmbd*sparsity
+    return x, params, z, rec, rec_err, cost, sparsity
 
 
 def initweight(shape, variant="normal", **kwargs):
