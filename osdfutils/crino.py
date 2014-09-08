@@ -296,7 +296,8 @@ def lconvista(config, shrinkage):
 
     layers = config['layers']
     btsz = config['btsz']
-    
+    lmbd = config['lambda']
+
     Dinit = config['D'] 
     _D = initweight(**Dinit)
     _d = np.sqrt(np.sum(_D * _D, axis=1, keepdims=True))
@@ -319,7 +320,7 @@ def lconvista(config, shrinkage):
 
     imshape = config['imshape']
     x = T.matrix('x')
-    x = x.reshape(imshape)
+    _x = x.reshape(imshape)
     
     z = T.zeros(config['zshape'], dtype=theano.config.floatX)
 
@@ -328,13 +329,13 @@ def lconvista(config, shrinkage):
     # Note though that T.grad catches up with increasing parameters.
     # Hand calculated grad is preferred due to higher flexibility. 
     for i in range(layers):
-        deconv = conv(z, D, border_mode='valid', 
+        deconv = Tconv.conv2d(z, D, border_mode='valid', 
                 image_shape=config['zshape'], filter_shape=fs1) 
-        gradZ = conv(deconv  - x, D[:,:,::-1,::-1].dimshuffle(1,0,2,3),
+        gradZ = Tconv.conv2d(deconv  - _x, D[:,:,::-1,::-1].dimshuffle(1,0,2,3),
                 border_mode='full', image_shape=config['imshape'],
                 filter_shape=fs2)
         gradZ = gradZ/btsz
-        z = shrinkage(Z - 1/L * gradZ, theta)
+        z = shrinkage(z - 1/L * gradZ, theta)
 
 
     def rec_error(_x, _z, D):
@@ -342,14 +343,14 @@ def lconvista(config, shrinkage):
         # and the corresponding (mean) square reconstruction error
         # rec_error = (X_i - rec_i) ** 2
 
-        rec = conv(_z, D, border_mode='valid', image_shape=config['zshape'],
+        rec = Tconv.conv2d(_z, D, border_mode='valid', image_shape=config['zshape'],
                 filter_shape=_D.shape) 
         error = 0.5*T.mean( ((x - rec)**2).sum(axis=-1).sum(axis=-1))
         return error, rec
 
 
-    sparsity = T.mean(T.sum(T.sum(T.abs_(Z),axis=-1),axis=-1))
-    rec_err, rec = rec_error(X,Z,D)    
+    sparsity = T.mean(T.sum(T.sum(T.abs_(z),axis=-1),axis=-1))
+    rec_err, rec = rec_error(_x, z, D)    
 
     cost = rec_err + lmbd*sparsity
     return x, params, z, rec, rec_err, cost, sparsity
@@ -446,16 +447,19 @@ def norm_updt(params, updates, todo):
             axis = todo[p.name]['axis']
             const = todo[p.name]['c']
             print "[NORM_UPDT] {0} normalized to {1} along axis {2}".format(p.name, const, axis)
-            wl = T.sqrt(T.sum(T.square(updates[p]), axis=axis) + 1e-6)
-            if axis == 0:
-                updates[p] = const * updates[p]/wl
+            if (axis is list) or (axis is tuple):
+                sq = T.square(updates[p])
+                for ax in axis:
+                    sq = T.sum(sq, axis=ax, keepdims=True)
+                wl = T.sqrt(sq + 1e-6)
             else:
-                updates[p] = const * updates[p]/wl.dimshuffle(0, 'x')
+                wl = T.sqrt(T.sum(T.square(updates[p]), axis=axis, keepdims=True) + 1e-6)
+            updates[p] = const * updates[p]/wl
     return updates
 
 
 def max_updt(params, updates, todo):
-    """Normalize updates wrt to minum value.
+    """Normalize updates wrt to minimum value.
     """
     for p in params:
         if p.name in todo:
