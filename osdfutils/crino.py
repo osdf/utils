@@ -120,6 +120,60 @@ def sh(x, theta):
     return T.sgn(x) * T.maximum(0, T.abs_(x) - theta)
 
 
+def lode(config, shrinkage):
+    """
+    Returns x, params, cost, grads
+    """
+    print "[LODE]"
+    layers = config['layers']
+    sp_lmbd = config['lambda']
+    L = config['L']
+    Dinit = config['D']
+    Qinit = conifg['Q']
+
+    x = T.matrix('x')
+    
+    # D for dictionary
+    _D = initweight(**Dinit)
+    # normalize atoms of dictionary (== rows) to length 1
+    _d = np.sqrt(np.sum(_D * _D, axis=1, keepdims=True))
+    _D /= _d
+    D = theano.shared(value=np.asarray(_D, dtype=theano.config.floatX),
+            borrow=True, name='D')
+    
+    # Q for ??
+    _Q = initweight(**Qinit)
+    # normalize atoms of dictionary (== rows) to length 1
+    _q = np.sqrt(np.sum(_Q * _Q, axis=1, keepdims=True))
+    _Q /= _q
+    Q = theano.shared(value=np.asarray(_Q, dtype=theano.config.floatX),
+            borrow=True, name='Q')
+
+
+    _theta = np.abs(np.random.randn(_S.shape[0],))
+    theta = theano.shared(value=np.asarray(_theta, dtype=theano.config.floatX),
+            borrow=True, name="theta")
+    
+    L = theano.shared(value=np.asarray(L, dtype=theano.config.floatX),
+            borrow=True, name="L")
+
+    params = (D, Q, L)
+
+    b = T.dot(x, D.T)
+    z = T.tanh(b)
+    #z = shrinkage(b, theta)
+    for i in range(layers):
+        b = T.dot(x, D.T) + T.dot(z, Q)
+        z = (1-L)*z + L*T.tanh(b)
+
+
+    rec = T.dot(z, D)
+    cost = T.mean(T.sum((x - rec)**2, axis=1))
+    sparsity = T.mean(T.sum(T.abs_(z), axis=1))
+    cost = cost + sp_lmbd * sparsity
+    return x, params, cost, rec, z
+
+
 def lista(config, shrinkage):
     """Learned ISTA by Gregor/Lecun.
 
@@ -136,8 +190,8 @@ def lista(config, shrinkage):
     # D for dictionary
     _D = initweight(**Dinit)
     # normalize atoms of dictionary (== rows) to length 1
-    _d = np.sqrt(np.sum(_D * _D, axis=1))
-    _D /= np.atleast_2d(_d).T
+    _d = np.sqrt(np.sum(_D * _D, axis=1, keepdims=True))
+    _D /= _d
     D = theano.shared(value=np.asarray(_D, dtype=theano.config.floatX),
             borrow=True, name='D')
 
