@@ -120,7 +120,7 @@ def sh(x, theta):
     return T.sgn(x) * T.maximum(0, T.abs_(x) - theta)
 
 
-def lode(config, shrinkage):
+def lode(config, activ):
     """
     Returns x, params, cost, grads
     """
@@ -129,7 +129,7 @@ def lode(config, shrinkage):
     sp_lmbd = config['lambda']
     L = config['L']
     Dinit = config['D']
-    Qinit = conifg['Q']
+    Qinit = config['Q']
 
     x = T.matrix('x')
     
@@ -144,16 +144,15 @@ def lode(config, shrinkage):
     # Q for ??
     _Q = initweight(**Qinit)
     # normalize atoms of dictionary (== rows) to length 1
+    _Qdiag = np.diag(_Q)
+    _Qrest = _Q - np.diag(_Qdiag)
+    _Qrest = (-1)*np.sign(_Qrest)*_Qrest
+    _Q = _Qrest + np.diag(0*_Qdiag)
     _q = np.sqrt(np.sum(_Q * _Q, axis=1, keepdims=True))
     _Q /= _q
     Q = theano.shared(value=np.asarray(_Q, dtype=theano.config.floatX),
             borrow=True, name='Q')
 
-
-    _theta = np.abs(np.random.randn(_S.shape[0],))
-    theta = theano.shared(value=np.asarray(_theta, dtype=theano.config.floatX),
-            borrow=True, name="theta")
-    
     L = theano.shared(value=np.asarray(L, dtype=theano.config.floatX),
             borrow=True, name="L")
 
@@ -164,7 +163,7 @@ def lode(config, shrinkage):
     #z = shrinkage(b, theta)
     for i in range(layers):
         b = T.dot(x, D.T) + T.dot(z, Q)
-        z = (1-L)*z + L*T.tanh(b)
+        z = (1-L)*z + L*activ(b)
 
 
     rec = T.dot(z, D)
@@ -518,8 +517,19 @@ def max_updt(params, updates, todo):
     for p in params:
         if p.name in todo:
             thresh = todo[p.name]['thresh']
-            print "[MAX_UPDT] {0} at least at {1}".format(p.name, thresh)
+            print "[MAX_UPDT] {0} at least {1}".format(p.name, thresh)
             updates[p] = T.maximum(thresh, updates[p])
+    return updates
+
+
+def min_updt(params, updates, todo):
+    """Normalize updates wrt to maximum value.
+    """
+    for p in params:
+        if p.name in todo:
+            thresh = todo[p.name]['thresh']
+            print "[MIN_UPDT] {0} at most {1}".format(p.name, thresh)
+            updates[p] = T.minimum(thresh, updates[p])
     return updates
 
 
