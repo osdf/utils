@@ -1617,6 +1617,15 @@ def adadelta(params, grads, settings, **kwargs):
     return updates
 
 
+def adam(params, grads, settings, **kwargs):
+    """
+    Adam by Kingma and Ba.
+
+    TODO
+    """
+    return updates
+
+
 def rmsprop(params, grads, settings, **kwargs):
     """
     RMSprop.
