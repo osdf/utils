@@ -256,6 +256,70 @@ def lruku(config, activ, tied=True):
     return x, params, cost, rec, z
 
 
+def lodeconv(config, activ, tied=True):
+    """
+    Returns x, params, cost, grads
+    """
+    print "[LODE]"
+    layers = config['layers']
+    sp_lmbd = config['lambda']
+    L = config['L']
+    Dinit = config['D']
+    Qinit = config['Q']
+
+    x = T.matrix('x')
+    
+    # D for dictionary
+    _D = initweight(**Dinit)
+    # normalize atoms of dictionary (== rows) to length 1
+    _d = np.sqrt(np.sum(_D * _D, axis=1, keepdims=True))
+    _D /= _d
+    D = theano.shared(value=np.asarray(_D, dtype=theano.config.floatX),
+            borrow=True, name='D')
+    
+    # Q for ??
+    _Q = initweight(**Qinit)
+    # normalize atoms of dictionary (== rows) to length 1
+    _Qdiag = np.diag(_Q)
+    _Qrest = _Q - np.diag(_Qdiag)
+    _Qrest = (-1)*np.sign(_Qrest)*_Qrest
+    _Q = _Qrest + np.diag(0*_Qdiag)
+    _q = np.sqrt(np.sum(_Q * _Q, axis=1, keepdims=True))
+    _Q /= _q
+    Q = theano.shared(value=np.asarray(_Q, dtype=theano.config.floatX),
+            borrow=True, name='Q')
+
+    L = theano.shared(value=np.asarray(L, dtype=theano.config.floatX),
+            borrow=True, name="L")
+
+    if tied:
+        W = D.T
+        params = [D, Q, L]
+    else:
+        _W = initweight(**Dinit).T
+        _w = np.sqrt(np.sum(_W * _W, axis=0, keepdims=True))
+        _W /= _w
+        W = theano.shared(value=np.asarray(_W, dtype=theano.config.floatX),
+            borrow=True, name='W')
+        params = [D, W, Q, L]
+
+    _theta = np.random.randn(_D.shape[0],)
+    theta = theano.shared(value=np.asarray(_theta, dtype=theano.config.floatX), 
+            borrow=True, name="theta")
+    params.append(theta)
+
+    b = T.dot(x, W)
+    z = activ(b + theta)
+    for i in range(layers):
+        b = T.dot(x, W) + T.dot(z, Q)
+        z = (1-L)*z + L*activ(b + theta)
+
+    rec = T.dot(z, D)
+    cost = T.mean(T.sum((x - rec)**2, axis=1))
+    sparsity = T.mean(T.sum(T.abs_(z), axis=1))
+    cost = cost + sp_lmbd * sparsity
+    return x, params, cost, rec, z
+
 def lista(config, shrinkage):
     """Learned ISTA by Gregor/Lecun.
 
