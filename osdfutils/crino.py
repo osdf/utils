@@ -273,7 +273,7 @@ def lodeconv(config, activ, tied=True):
     # D for reconstruction convolutional dictionary
     _D = initweight(**Dinit)
     # normalize atoms of dictionary (== filters) to length 1
-    _d = np.sqrt(np.sum(_D * _D, axis=(2, 3), keepdims=True))
+    _d = np.sqrt(np.sum(_D**2, axis=(2, 3), keepdims=True))
     _D /= _d
     D = theano.shared(value=np.asarray(_D, dtype=theano.config.floatX),
             borrow=True, name='D')
@@ -283,37 +283,42 @@ def lodeconv(config, activ, tied=True):
     # normalize atoms of dictionary to length 1
     # special case here: 1x1 filters over feature maps
     q1, q2, q3, q4 = Qinit['shape']
-    _Q = _Q.reshape(s1, s2)
+    assert q3 == 1, "1x1 convolution for Q!"
+    assert q4 == 1, "1x1 convolution for Q!"
+    _Q = _Q.reshape(q1, q2)
+    # make sure Q has only negative elements on non diagonals.
     _Qdiag = np.diag(_Q)
     _Qrest = _Q - np.diag(_Qdiag)
     _Qrest = (-1)*np.sign(_Qrest)*_Qrest
     _Q = _Qrest + np.diag(0*_Qdiag)
-    _q = np.sqrt(np.sum(_Q * _Q, axis=1, keepdims=True))
+    _q = np.sqrt(np.sum(_Q**2, axis=1, keepdims=True))
     _Q /= _q
-    _Q = _Q.reshape(s1, s2, s3, s4)
+    _Q = _Q.reshape(q1, q2,1, 1)
     Q = theano.shared(value=np.asarray(_Q, dtype=theano.config.floatX),
             borrow=True, name='Q')
 
     L = theano.shared(value=np.asarray(L, dtype=theano.config.floatX),
             borrow=True, name="L")
 
+    params = [D, Q, L]
     if tied:
         W = D.T
-        params = [D, Q, L]
     else:
-        _W = initweight(**Dinit).T
-        _w = np.sqrt(np.sum(_W * _W, axis=(2, 3), keepdims=True))
+        _W = initweight(**Winit).T
+        _w = np.sqrt(np.sum(_W**2, axis=(2, 3), keepdims=True))
         _W /= _w
         W = theano.shared(value=np.asarray(_W, dtype=theano.config.floatX),
             borrow=True, name='W')
-        params = [D, W, Q, L]
-    w1, w2, w3, w4 = Winit['shape']
-    zimshape = (imshape[0], w1, imshape[2] - w3 + 1, imshape[3] - w4 + 1) 
-    _theta = np.random.randn(_W.shape[0],)
+        params.append(W)
+    _theta = np.random.randn(Winit['shape'],)
     theta = theano.shared(value=np.asarray(_theta, dtype=theano.config.floatX), 
             borrow=True, name="theta")
     params.append(theta)
 
+    w1, w2, w3, w4 = Winit['shape']
+    zimshape = (imshape[0], w1, imshape[2] - w3 + 1, imshape[3] - w4 + 1) 
+    
+    # first iteration of ode.
     b = Tconv.conv2d(input=x, filters=W, filter_shape=Winit['shape'],
             border_mode="valid", image_shape=imshape)
     z = activ(b + theta.dimshuffle('x', 0, 'x', 'x'))
@@ -330,6 +335,7 @@ def lodeconv(config, activ, tied=True):
     sparsity = T.mean(T.sum(T.abs_(z), axis=(1,2,3)))
     cost = cost + sp_lmbd * sparsity
     return x, params, cost, rec, z
+
 
 def lista(config, shrinkage):
     """Learned ISTA by Gregor/Lecun.
