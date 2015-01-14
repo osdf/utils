@@ -260,32 +260,37 @@ def lodeconv(config, activ, tied=True):
     """
     Returns x, params, cost, grads
     """
-    print "[LODE]"
+    print "[LODE-CONV]"
     layers = config['layers']
     sp_lmbd = config['lambda']
     L = config['L']
     Dinit = config['D']
     Qinit = config['Q']
-
+    Winit = config['W']
+    imshape = config['imshape']
     x = T.matrix('x')
     
-    # D for dictionary
+    # D for reconstruction convolutional dictionary
     _D = initweight(**Dinit)
-    # normalize atoms of dictionary (== rows) to length 1
-    _d = np.sqrt(np.sum(_D * _D, axis=1, keepdims=True))
+    # normalize atoms of dictionary (== filters) to length 1
+    _d = np.sqrt(np.sum(_D * _D, axis=(2, 3), keepdims=True))
     _D /= _d
     D = theano.shared(value=np.asarray(_D, dtype=theano.config.floatX),
             borrow=True, name='D')
     
     # Q for ??
     _Q = initweight(**Qinit)
-    # normalize atoms of dictionary (== rows) to length 1
+    # normalize atoms of dictionary to length 1
+    # special case here: 1x1 filters over feature maps
+    q1, q2, q3, q4 = Qinit['shape']
+    _Q = _Q.reshape(s1, s2)
     _Qdiag = np.diag(_Q)
     _Qrest = _Q - np.diag(_Qdiag)
     _Qrest = (-1)*np.sign(_Qrest)*_Qrest
     _Q = _Qrest + np.diag(0*_Qdiag)
     _q = np.sqrt(np.sum(_Q * _Q, axis=1, keepdims=True))
     _Q /= _q
+    _Q = _Q.reshape(s1, s2, s3, s4)
     Q = theano.shared(value=np.asarray(_Q, dtype=theano.config.floatX),
             borrow=True, name='Q')
 
@@ -297,26 +302,32 @@ def lodeconv(config, activ, tied=True):
         params = [D, Q, L]
     else:
         _W = initweight(**Dinit).T
-        _w = np.sqrt(np.sum(_W * _W, axis=0, keepdims=True))
+        _w = np.sqrt(np.sum(_W * _W, axis=(2, 3), keepdims=True))
         _W /= _w
         W = theano.shared(value=np.asarray(_W, dtype=theano.config.floatX),
             borrow=True, name='W')
         params = [D, W, Q, L]
-
-    _theta = np.random.randn(_D.shape[0],)
+    w1, w2, w3, w4 = Winit['shape']
+    zimshape = (imshape[0], w1, imshape[2] - w3 + 1, imshape[3] - w4 + 1) 
+    _theta = np.random.randn(_W.shape[0],)
     theta = theano.shared(value=np.asarray(_theta, dtype=theano.config.floatX), 
             borrow=True, name="theta")
     params.append(theta)
 
-    b = T.dot(x, W)
-    z = activ(b + theta)
+    b = Tconv.conv2d(input=x, filters=W, filter_shape=Winit['shape'],
+            border_mode="valid", image_shape=imshape)
+    z = activ(b + theta.dimshuffle('x', 0, 'x', 'x'))
     for i in range(layers):
-        b = T.dot(x, W) + T.dot(z, Q)
-        z = (1-L)*z + L*activ(b + theta)
+        _b = Tconv.conv2d(input=x, filters=W, filter_shape=Winit['shape'],
+            border_mode="valid", image_shape=imshape)
+        b = _b + Tconv.conv2d(input=z, filters=Q, filter_shape=Qinit['shape'],
+                border_mode="valid", image_shape=zimshape)
+        z = (1-L)*z + L*activ(b + theta.dimshuffle('x', 0, 'x', 'x'))
 
-    rec = T.dot(z, D)
-    cost = T.mean(T.sum((x - rec)**2, axis=1))
-    sparsity = T.mean(T.sum(T.abs_(z), axis=1))
+    rec = Tconv.conv2d(input=z, filters=D, filter_shape=Dinit['shape'],
+            border_mode="full", image_shape=zimshape)
+    cost = T.mean(T.sum((x - rec)**2, axis=(2,3)))
+    sparsity = T.mean(T.sum(T.abs_(z), axis=(1,2,3)))
     cost = cost + sp_lmbd * sparsity
     return x, params, cost, rec, z
 
@@ -568,7 +579,14 @@ def initweight(shape, variant="normal", **kwargs):
         weights = np.asarray(np.random.normal(loc=0, scale=std, size=shape),
                 dtype=theano.config.floatX)
     elif variant is "uniform":
-        units = shape[0]*shape[1]
+        if len(shape) == 2:
+            units = shape[0]*shape[1]
+        elif len(shape) == 4:
+            units = np.prod(shape[1:])
+            _tmp = units[0] * np.prod(units[2:])
+            units = units + _tmp
+        else:
+            assert False, "Shape in initweight is difficult to handle."
         bound = 4*np.sqrt(6./units)
         weights = np.asarray(np.uniform(low=-bound, high=bound, size=shape),
                 dtype=theano.config.floatX)
