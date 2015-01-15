@@ -291,7 +291,7 @@ def lodeconv(config, activ, tied=True):
     _Qdiag = np.diag(_Q)
     _Qrest = _Q - np.diag(_Qdiag)
     _Qrest = (-1)*np.sign(_Qrest)*_Qrest
-    _Q = _Qrest + np.diag(0*_Qdiag)
+    _Q = _Qrest + np.diag(0*_Qdiag+1)
     _q = np.sqrt(np.sum(_Q**2, axis=1, keepdims=True))
     _Q /= _q
     _Q = _Q.reshape(q1, q2,1, 1)
@@ -593,12 +593,12 @@ def initweight(shape, variant="normal", **kwargs):
             units = shape[0]*shape[1]
         elif len(shape) == 4:
             units = np.prod(shape[1:])
-            _tmp = units[0] * np.prod(units[2:])
+            _tmp = units * np.prod(shape[2:])
             units = units + _tmp
         else:
             assert False, "Shape in initweight is difficult to handle."
         bound = 4*np.sqrt(6./units)
-        weights = np.asarray(np.uniform(low=-bound, high=bound, size=shape),
+        weights = np.asarray(np.random.uniform(low=-bound, high=bound, size=shape),
                 dtype=theano.config.floatX)
     elif variant is "sparse":
         sparsity = kwargs["sparsity"]
