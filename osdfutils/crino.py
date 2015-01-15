@@ -269,12 +269,13 @@ def lodeconv(config, activ, tied=True):
     Winit = config['W']
     imshape = config['imshape']
     x = T.matrix('x')
-    
+    x = x.reshape(imshape)
     # D for reconstruction convolutional dictionary
     _D = initweight(**Dinit)
     # normalize atoms of dictionary (== filters) to length 1
     _d = np.sqrt(np.sum(_D**2, axis=(2, 3), keepdims=True))
     _D /= _d
+    print "D", _D.shape
     D = theano.shared(value=np.asarray(_D, dtype=theano.config.floatX),
             borrow=True, name='D')
     
@@ -294,23 +295,25 @@ def lodeconv(config, activ, tied=True):
     _q = np.sqrt(np.sum(_Q**2, axis=1, keepdims=True))
     _Q /= _q
     _Q = _Q.reshape(q1, q2,1, 1)
+    print "Q", _Q.shape
     Q = theano.shared(value=np.asarray(_Q, dtype=theano.config.floatX),
             borrow=True, name='Q')
 
     L = theano.shared(value=np.asarray(L, dtype=theano.config.floatX),
             borrow=True, name="L")
 
-    params = [D, Q, L]
+    params = [D, L]
     if tied:
         W = D.T
     else:
-        _W = initweight(**Winit).T
+        _W = initweight(**Winit)
         _w = np.sqrt(np.sum(_W**2, axis=(2, 3), keepdims=True))
         _W /= _w
+        print "W", _W.shape
         W = theano.shared(value=np.asarray(_W, dtype=theano.config.floatX),
             borrow=True, name='W')
         params.append(W)
-    _theta = np.random.randn(Winit['shape'],)
+    _theta = np.random.randn(Winit['shape'][0],)
     theta = theano.shared(value=np.asarray(_theta, dtype=theano.config.floatX), 
             borrow=True, name="theta")
     params.append(theta)
@@ -334,6 +337,7 @@ def lodeconv(config, activ, tied=True):
     cost = T.mean(T.sum((x - rec)**2, axis=(2,3)))
     sparsity = T.mean(T.sum(T.abs_(z), axis=(1,2,3)))
     cost = cost + sp_lmbd * sparsity
+    params.append(Q)
     return x, params, cost, rec, z
 
 
@@ -673,8 +677,7 @@ def norm_updt(params, updates, todo):
             print "[NORM_UPDT] {0} normalized to {1} along axis {2}".format(p.name, const, axis)
             if (axis is list) or (axis is tuple):
                 sq = T.square(updates[p])
-                for ax in axis:
-                    sq = T.sum(sq, axis=ax, keepdims=True)
+                sq = T.sum(sq, axis=axis, keepdims=True)
                 wl = T.sqrt(sq + 1e-6)
             else:
                 wl = T.sqrt(T.sum(T.square(updates[p]), axis=axis, keepdims=True) + 1e-6)
