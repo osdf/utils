@@ -675,12 +675,7 @@ def norm_updt(params, updates, todo):
             axis = todo[p.name]['axis']
             const = todo[p.name]['c']
             print "[NORM_UPDT] {0} normalized to {1} along axis {2}".format(p.name, const, axis)
-            if (axis is list) or (axis is tuple):
-                sq = T.square(updates[p])
-                sq = T.sum(sq, axis=axis, keepdims=True)
-                wl = T.sqrt(sq + 1e-6)
-            else:
-                wl = T.sqrt(T.sum(T.square(updates[p]), axis=axis, keepdims=True) + 1e-6)
+            wl = T.sqrt(T.sum(T.square(updates[p]), axis=axis, keepdims=True) + 1e-6)
             updates[p] = const * updates[p]/wl
     return updates
 
