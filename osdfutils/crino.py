@@ -1858,10 +1858,44 @@ def adadelta(params, grads, settings, **kwargs):
 
 def adam(params, grads, settings, **kwargs):
     """
-    Adam by Kingma and Ba.
-
-    TODO
+    AdaM by Kingma and Ba.
+    
+    According to the paper good settings for the parameters are
+    - alpha = 2e-4
+    - beta1 = 0.1
+    - beta2 = 1e-3
     """
+    eps = 1e-8
+    alpha = settings['alpha']
+    b1 = settings['beta1']
+    b2 = settings['beta2']
+
+    print "[AdaM] alpha: {0}; beta1: {1}, beta2: {2}".format(alpha, b1, b2)
+
+    ms = []
+    vs = []
+
+    t = theano.shared(np.cast['float32'](0.))
+    for p in params:
+        _m = theano.shared(np.zeros(p.get_value(borrow=True).shape,
+            dtype=theano.config.floatX))
+        ms.append(_m)
+
+        _v = theano.shared(np.zeros(p.get_value(borrow=True).shape,
+            dtype=theano.config.floatX))
+        vs.append(_v)
+
+    updates = OrderedDict()
+    for grad_i, _m, _v in zip(grads, ms, vs):
+        updates[_m] = b1*grad_i + (1-b1)*_m
+        updates[_v] = b2*grad_i*grad_i + (1-b2)*_v
+        updates[t] = t + 1
+
+    for param_i, grad_i, _m, _v in zip(params, grads, ms, vs):
+        _m_ = _m/(1-(1-b1)**updates[t])
+        _v_ = _v/(1-(1-b2)**updates[t])
+        delta_i = alpha * _m_/(T.sqrt(_v_) + eps) 
+        updates[param_i] = param_i - delta_i
     return updates
 
 
@@ -1869,7 +1903,7 @@ def rmsprop(params, grads, settings, **kwargs):
     """
     RMSprop.
     """
-    eps = 10e-8
+    eps = 1e-8
     lr = settings['lr']
     decay = settings['decay']
     mom = settings['momentum']
