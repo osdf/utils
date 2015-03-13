@@ -2015,3 +2015,14 @@ def test_vae(enc_out=2, epochs=100, lr=1,
         for mbi in xrange(batches):
             cost += btsz*train(data[mbi*btsz:(mbi+1)*btsz])
         print epoch, cost/sz
+
+def perforate(x, scale=2):
+    """
+    Upsample a 4d tensor in the last two dimensions
+    by simply copying available information into its
+    respective position.
+    Proposed by Hubert Soyer.
+    """
+    upsampled = T.zeros(x.shape[0], x.shape[1], x.shape[2]*scale, x.shape[3]*scale, dtype=x.dtype)
+    upsampled = T.set_subtensor(upsampled[:, :, ::scale, ::scale], x)
+    return upsampled
