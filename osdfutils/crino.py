@@ -730,37 +730,61 @@ def lconvista(config, shrinkage):
     return x, params, z, rec, rec_err, cost, sparsity
 
 
-def initweight(shape, variant="normal", **kwargs):
+def initweight(shape, typ="normal", **kwargs):
     """
-    Init weights.
+    Initialize weights.
     """
-    if variant is "normal":
+    tag = "initweight"
+    if typ is "normal":
         if "std" in kwargs:
             std = kwargs["std"]
         else:
             std = 0.1
         weights = np.asarray(np.random.normal(loc=0, scale=std, size=shape),
                 dtype=theano.config.floatX)
-    elif variant is "uniform":
+    elif typ == "uniform":
         if len(shape) == 2:
             units = shape[0]*shape[1]
+            bound = 4*np.sqrt(6./units)
         elif len(shape) == 4:
             units = np.prod(shape[1:])
-            _tmp = units * np.prod(shape[2:])
+            _tmp = shape[0] * np.prod(shape[2:])
             units = units + _tmp
+            bound = np.sqrt(6. / units)
         else:
-            assert False, "Shape in initweight is difficult to handle."
-        bound = 4*np.sqrt(6./units)
+            assert False, "[{0}] Shape is difficult to handle."
         weights = np.asarray(np.random.uniform(low=-bound, high=bound, size=shape),
                 dtype=theano.config.floatX)
-    elif variant is "sparse":
+    elif typ == "xavier":
+        if len(shape) == 2:
+            units = shape[0]
+        elif len(shape) == 4:
+            im_shape = kwargs["imshape"]
+            units = np.prod([im_shape[1:]])
+        std = np.sqrt(1./units)
+        weights = np.asarray(np.random.normal(loc=0, scale=std, size=shape),
+                             dtype=theano.config.floatX)
+    elif typ == "msft":
+        if len(shape) == 2:
+            units = shape[0]
+        elif len(shape) == 4:
+            im_shape = kwargs["imshape"]
+            units = np.prod([im_shape[1:]])
+        std = np.sqrt(2./units)
+        print "[{0}] -- MSFT needs ReLU: {1}".format(tag, std)
+        weights = np.asarray(np.random.normal(loc=0, scale=std, size=shape),
+                             dtype=theano.config.floatX)
+    elif typ == "sparse":
         sparsity = kwargs["sparsity"]
-        weights = np.zeroes(shape, dtype=theano.config.floatX)
-        for w in weights:
-            w[random.sample(xrange(n), sparsity)] = np.random.randn(sparsity)
-        weights = weights.T
+        if len(shape) == 2:
+            weights = np.zeroes(shape, dtype=theano.config.floatX)
+            for w in weights:
+                w[random.sample(xrange(n), sparsity)] = np.random.randn(sparsity)
+            weights = weights.T
+        elif len(shape) == 4:
+            raise NotImplementedError
     else:
-        assert False, 'Problem in initweight.'
+        assert False, "[{0}]. Unknown type {1}.".format(tag, typ)
 
     return weights
 
@@ -993,7 +1017,7 @@ def conv(config, params, im):
     shapes = config['shapes']
     activs = config['activs']
     pools = config['pools']
-
+    inits = config['inits']
     assert len(shapes) == len(activs),\
             "[CNN -- {0}]: One layer, One activation.".format(tag)
     assert len(shapes) == len(pools),\
@@ -1003,8 +1027,6 @@ def conv(config, params, im):
 
     print "[CNN -- {0}]: CNN with {1} layers, input image {2}.".format(tag, len(shapes), imshape)
     
-    init = config["init"]
-
     inpt = im[config['inpt']]
     if type(inpt) in [list, tuple]:
         if len(inpt) == 1:
@@ -1013,21 +1035,13 @@ def conv(config, params, im):
 
     inpt = inpt.reshape(imshape)
     _tmp_name = config['inpt']
-    for i, (shape, act, pool) in enumerate(zip(shapes, activs, pools)):
+    for i, (shape, act, pool, init) in enumerate(zip(shapes, activs, pools, inits)):
         assert imshape[1] == shape[1],\
             "[CNN -- {0}, L{1}]: Input and Shapes need to fit.".format(tag, i)
 
-        if init == "normal":
-            print "[CNN -- {0}, L{1}]: Init shape {2} via Gaussian.".format(tag, i, shape)
-            _tmp = {"std": 0.1}
-            _tmp = initweight(shape, variant=init, **_tmp) 
-        else:
-            print "[CNN -- {0}, L{1}]: Init shape {2} via Uniform.".format(tag, i, shape)
-            fan_in = np.prod(shape[1:])
-            fan_out = (shape[0] * np.prod(shape[2:]) / np.prod(pool))
-            winit = np.sqrt(6. / (fan_in + fan_out))
-            _tmp = np.asarray(np.random.uniform(low=-winit, high=winit,
-                size=shape), dtype=theano.config.floatX)
+        init["imshape"] = imshape
+        _tmp = initweight(shape, variant=init['type'], **init)
+        
         _tmp_name = "{0}_cnn_w{1}".format(tag, i)
         _w = theano.shared(value=_tmp, borrow=True, name=_tmp_name)
         params.append(_w)
@@ -1134,42 +1148,43 @@ def deconv(config, params, im):
 
     shapes = config['shapes']
     activs = config['activs']
-    pools = config['pools']
-
+    scales = config['scales']
+    borders = config['borders']
+    inits = config["inits"]
+    
     assert len(shapes) == len(activs),\
-            "[CNN -- {0}]: One layer, One activation.".format(tag)
-    assert len(shapes) == len(pools),\
-            "[CNN -- {0}]: One layer, One Pool.".format(tag)
+            "[DCNN -- {0}]: One layer, One activation.".format(tag)
+    assert len(shapes) == len(scales),\
+            "[DCNN -- {0}]: One layer, One Scale.".format(tag)
+    assert len(shapes) == len(borders),\
+            "[DCNN -- {0}]: One layer, One Border.".format(tag)
 
     imshape = config['imshape']
 
-    print "[CNN -- {0}]: CNN with {1} layers, input image {2}.".format(tag, len(shapes), imshape)
+    print "[DCNN -- {0}]: DeconvCNN with {1} layers, input image {2}.".format(tag, len(shapes), imshape)
     
-    init = config["init"]
+    init = config["inits"]
 
     inpt = im[config['inpt']]
     if type(inpt) in [list, tuple]:
         if len(inpt) == 1:
-            print "[CNN -- {0}]: Input is a 1-list, taking first element.".format(tag)
+            print "[DCNN -- {0}]: Input is a 1-list, taking first element.".format(tag)
             inpt = inpt[0]
 
     inpt = inpt.reshape(imshape)
     _tmp_name = config['inpt']
-    for i, (shape, act, pool) in enumerate(zip(shapes, activs, pools)):
+    for i, (shape, act, scale, border, init) in enumerate(zip(shapes, activs, scales, borders, inits)):
         assert imshape[1] == shape[1],\
-            "[CNN -- {0}, L{1}]: Input and Shapes need to fit.".format(tag, i)
+            "[DCNN -- {0}, L{1}]: Input and Shapes need to fit.".format(tag, i)
+        assert border in ["full", "valid"],\
+            "[DCNN -- {0}, L{1}]: Border should be 'full' or 'valid'.".format(tag, i)
+        _upsampled = perforate(x=inpt, scale=scale)
+        _tmp_name = "{0}_upsampled_layer{1}".format(tag, i)
+        im[_tmp_name] = _upsampled
+        imshape = (imshape[0], imshape[1], imshape[2]*scale, imshape[3]*scale)
 
-        if init == "normal":
-            print "[CNN -- {0}, L{1}]: Init shape {2} via Gaussian.".format(tag, i, shape)
-            _tmp = {"std": 0.1}
-            _tmp = initweight(shape, variant=init, **_tmp) 
-        else:
-            print "[CNN -- {0}, L{1}]: Init shape {2} via Uniform.".format(tag, i, shape)
-            fan_in = np.prod(shape[1:])
-            fan_out = (shape[0] * np.prod(shape[2:]) / np.prod(pool))
-            winit = np.sqrt(6. / (fan_in + fan_out))
-            _tmp = np.asarray(np.random.uniform(low=-winit, high=winit,
-                size=shape), dtype=theano.config.floatX)
+        init["imshape"] = imshape
+        _tmp = initweight(shape, variant=init['type'], **init)
         _tmp_name = "{0}_cnn_w{1}".format(tag, i)
         _w = theano.shared(value=_tmp, borrow=True, name=_tmp_name)
         params.append(_w)
@@ -1178,20 +1193,24 @@ def deconv(config, params, im):
         _b = theano.shared(value=_tmp, borrow=True, name=_tmp_name)
         params.append(_b)
 
-        _conv = Tconv.conv2d(input=inpt, filters=_w, filter_shape=shape,
-                image_shape=imshape)
+        _conv = Tconv.conv2d(input=_upsampled, filters=_w, filter_shape=shape,
+                             image_shape=imshape, border_mode=border)
+        if shape[2] > 1 and border == "full":
+            print "[DCNN -- {0}, L{1}]: Slicing in 2d with {2}.".format(tag, i, shape[2]//2)
+            s1 = shape[2]//2
+            s2 = shape[3]//2
+            _conv = _conv[:, :, s1:-s1, s2:-s2]
+            imshape = (imshape[0], shape[0], imshape[2], imshape[3])
+        elif border == "valid":
+            imshape = (imshape[0], shape[0], imshape[2]-shape[2]+1, imshape[3]-shape[3]+1)
+        print "----", imshape
+        
         _tmp_name = "{0}_conv_layer{1}".format(tag, i)
         im[_tmp_name] = _conv
 
-        _pool = downsample.max_pool_2d(input=_conv, ds=pool, ignore_border=True)
-        _tmp_name = "{0}_pool_layer{1}".format(tag, i)
-        im[_tmp_name] = _pool
-
-        inpt = act(_pool + _b.dimshuffle('x', 0, 'x', 'x'))
+        inpt = act(_conv + _b.dimshuffle('x', 0, 'x', 'x'))
         _tmp_name = "{0}_cnn_layer{1}".format(tag, i)
         im[_tmp_name] = inpt
-        imshape = (imshape[0], shape[0], (imshape[2] - shape[2] + 1)//pool[0],\
-                (imshape[3] - shape[3] + 1)//pool[1])
     im[_tmp_name] = im[_tmp_name].flatten(2)
     config['otpt'] = _tmp_name
 
@@ -1866,11 +1885,24 @@ def adam(params, grads, settings, **kwargs):
     - beta2 = 1e-3
     """
     eps = 1e-8
-    alpha = settings['alpha']
-    b1 = settings['beta1']
-    b2 = settings['beta2']
-
-    print "[AdaM] alpha: {0}; beta1: {1}, beta2: {2}".format(alpha, b1, b2)
+    if "alpha" in settings:
+        alpha = settings['alpha']
+    else:
+        alpha = 2e-4
+    if "beta1" in settings:
+        b1 = settings['beta1']
+    else:
+        b1 = 0.1
+    if "beta2" in settings:
+        b2 = settings['beta2']
+    else:
+        b2 = 1e-3
+    if "lambda" in settings:
+        lmbd = settings["lambda"]
+    else:
+        lmbd = 1e-8
+    
+    print "[AdaM] alpha: {0}; beta1: {1}, beta2: {2}, lambda: {3}".format(alpha, b1, b2, lmbd)
 
     ms = []
     vs = []
@@ -2016,6 +2048,7 @@ def test_vae(enc_out=2, epochs=100, lr=1,
             cost += btsz*train(data[mbi*btsz:(mbi+1)*btsz])
         print epoch, cost/sz
 
+        
 def perforate(x, scale=2):
     """
     Upsample a 4d tensor in the last two dimensions
@@ -2023,6 +2056,8 @@ def perforate(x, scale=2):
     respective position.
     Proposed by Hubert Soyer.
     """
-    upsampled = T.zeros(x.shape[0], x.shape[1], x.shape[2]*scale, x.shape[3]*scale, dtype=x.dtype)
+    if scale == 1:
+        return x
+    upsampled = T.zeros((x.shape[0], x.shape[1], x.shape[2]*scale, x.shape[3]*scale), dtype=x.dtype)
     upsampled = T.set_subtensor(upsampled[:, :, ::scale, ::scale], x)
     return upsampled
