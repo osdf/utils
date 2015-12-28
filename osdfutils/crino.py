@@ -24,7 +24,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-""" 
+"""
 import numpy as np
 import theano
 import theano.tensor as T
@@ -50,7 +50,7 @@ def skmeans():
 
 def sae(shape, activ, lmbd, init='uniform'):
     """
-    Synchronous autoencoder for motion, see 
+    Synchronous autoencoder for motion, see
     Learning to encode motion using spatio-temporal synchrony
     Konda,K., Memisevic, R., Michalski, V.
     eq. 20
@@ -67,14 +67,14 @@ def sae(shape, activ, lmbd, init='uniform'):
 
     h = T.dot(x, W)
     sh = activ(h*h)
-    
+
     cae = T.grad(T.sum(T.mean(sh, axis=0)), h)
     cae = T.sum( T.mean(cae*cae, axis=0) * T.sum(T.sqr(W), axis=0) )
-    
+
     _b = np.zeros((shape[0],), dtype=theano.config.floatX)
     b1 = theano.shared(value=_b, borrow=True)
     xhat = T.dot(sh*h, W.T) + b1
-    
+
     rec = T.sum( (x - xhat)**2, axis=1 )
     cost = T.mean(rec) + lmbd * cae
 
@@ -123,7 +123,7 @@ def test_zbae(hidden, indim, epochs, lr, momentum, btsz, batches,
 
     print "Building model ..."
     inits = {"std": 0.1, "n": data.shape[1], "m": hidden}
-    Winit = initweight(variant="normal", **inits) 
+    Winit = initweight(variant="normal", **inits)
     params, cost, grads, x = zbae(Winit, activ=activ, theta=theta)
     learner = {"lr": lr, "momentum": momentum}
     updates = momntm(params, grads, **learner)
@@ -155,7 +155,7 @@ def lode(config, activ, tied=True):
     Qinit = config['Q']
 
     x = T.matrix('x')
-    
+
     # D for dictionary
     _D = initweight(**Dinit)
     # normalize atoms of dictionary (== rows) to length 1
@@ -163,7 +163,7 @@ def lode(config, activ, tied=True):
     _D /= _d
     D = theano.shared(value=np.asarray(_D, dtype=theano.config.floatX),
             borrow=True, name='D')
-    
+
     # Q for ??
     _Q = initweight(**Qinit)
     # normalize atoms of dictionary (== rows) to length 1
@@ -191,15 +191,89 @@ def lode(config, activ, tied=True):
         params = [D, W, Q, L]
 
     _theta = np.random.randn(_D.shape[0],)
-    theta = theano.shared(value=np.asarray(_theta, dtype=theano.config.floatX), 
+    theta = theano.shared(value=np.asarray(_theta, dtype=theano.config.floatX),
             borrow=True, name="theta")
+    params.append(theta)
+
+    b = T.dot(x, W)
+    z = L*activ(b + theta)
+    for i in range(layers):
+        b = T.dot(x, W) + T.dot(z, Q)
+        z = (1-L)*z + L*activ(b + theta)
+
+    rec = T.dot(z, D)
+    cost = T.mean(T.sum((x - rec)**2, axis=1))
+    sparsity = T.mean(T.sum(T.abs_(z), axis=1))
+    cost = cost + sp_lmbd * sparsity
+    return x, params, cost, rec, z
+
+
+def lode2(config, activ):
+    """
+    Returns x, params, cost, grads
+
+    This has a two layer encoder architecture.
+    """
+    print "[LODE]"
+    layers = config['layers']
+    sp_lmbd = config['lambda']
+    L = config['L']
+    Dinit = config['D']
+    Qinit = config['Q']
+    W1init = config['W1']
+    W2init = config['W2']
+
+    x = T.matrix('x')
+
+    # D for dictionary
+    _D = initweight(**Dinit)
+    # normalize atoms of dictionary (== rows) to length 1
+    _d = np.sqrt(np.sum(_D * _D, axis=1, keepdims=True))
+    _D /= _d
+    D = theano.shared(value=np.asarray(_D, dtype=theano.config.floatX),
+            borrow=True, name='D')
+
+    # Q for ??
+    _Q = initweight(**Qinit)
+    # normalize atoms of dictionary (== rows) to length 1
+    _Qdiag = np.diag(_Q)
+    _Qrest = _Q - np.diag(_Qdiag)
+    _Qrest = (-1)*np.sign(_Qrest)*_Qrest
+    _Q = _Qrest + np.diag(0*_Qdiag)
+    _q = np.sqrt(np.sum(_Q * _Q, axis=1, keepdims=True))
+    _Q /= _q
+    Q = theano.shared(value=np.asarray(_Q, dtype=theano.config.floatX),
+            borrow=True, name='Q')
+
+    L = theano.shared(value=np.asarray(L, dtype=theano.config.floatX),
+            borrow=True, name="L")
+
+    _W1 = initweight(**W1init)
+    _w = np.sqrt(np.sum(_W1 * _W1, axis=0, keepdims=True))
+    _W1 /= _w
+    W1 = theano.shared(value=np.asarray(_W1, dtype=theano.config.floatX),
+        borrow=True, name='W1')
+    _W2 = initweight(**W2init)
+    _w = np.sqrt(np.sum(_W2 * _W2, axis=0, keepdims=True))
+    _W2 /= _w
+    W2 = theano.shared(value=np.asarray(_W2, dtype=theano.config.floatX),
+        borrow=True, name='W2')
+    params = [D, W1, W2, Q, L]
+
+    _theta1 = np.random.randn(_W1.shape[1])
+    theta1 = theano.shared(value=np.asarray(_theta1, dtype=theano.config.floatX),
+            borrow=True, name="theta1")
+    _theta2 = np.random.randn(_W2.shape[1],)
+    theta2 = theano.shared(value=np.asarray(_theta2, dtype=theano.config.floatX),
+            borrow=True, name="theta2")
     params.append(theta)
 
     b = T.dot(x, W)
     z = activ(b + theta)
     for i in range(layers):
-        b = T.dot(x, W) + T.dot(z, Q)
-        z = (1-L)*z + L*activ(b + theta)
+        b = activ(T.dot(x, W1) + theta1)
+        b = T.dot(b, W2) + theta2 + T.dot(z, Q)
+        z = (1-L)*z + L*activ(b)
 
     rec = T.dot(z, D)
     cost = T.mean(T.sum((x - rec)**2, axis=1))
@@ -220,7 +294,7 @@ def lruku(config, activ, tied=True):
     Qinit = config['Q']
 
     x = T.matrix('x')
-    
+
     # D for dictionary
     _D = initweight(**Dinit)
     # normalize atoms of dictionary (== rows) to length 1
@@ -228,7 +302,7 @@ def lruku(config, activ, tied=True):
     _D /= _d
     D = theano.shared(value=np.asarray(_D, dtype=theano.config.floatX),
             borrow=True, name='D')
-    
+
     # Q for ??
     _Q = initweight(**Qinit)
     # normalize atoms of dictionary (== rows) to length 1
@@ -255,9 +329,9 @@ def lruku(config, activ, tied=True):
             borrow=True, name='W')
         params = [D, W, Q, L]
 
- 
+
     _theta = np.random.randn(_D.shape[0],)
-    theta = theano.shared(value=np.asarray(_theta, dtype=theano.config.floatX), 
+    theta = theano.shared(value=np.asarray(_theta, dtype=theano.config.floatX),
             borrow=True, name="theta")
     params.append(theta)
 
@@ -301,7 +375,7 @@ def lodeconv(config, activ, tied=True):
     print "D", _D.shape
     D = theano.shared(value=np.asarray(_D, dtype=theano.config.floatX),
             borrow=True, name='D')
-    
+
     # Q for ??
     _Q = initweight(**Qinit)
     # normalize atoms of dictionary to length 1
@@ -337,13 +411,13 @@ def lodeconv(config, activ, tied=True):
             borrow=True, name='W')
         params.append(W)
     _theta = np.random.randn(Winit['shape'][0],)
-    theta = theano.shared(value=np.asarray(_theta, dtype=theano.config.floatX), 
+    theta = theano.shared(value=np.asarray(_theta, dtype=theano.config.floatX),
             borrow=True, name="theta")
     params.append(theta)
 
     w1, w2, w3, w4 = Winit['shape']
-    zimshape = (imshape[0], w1, imshape[2] - w3 + 1, imshape[3] - w4 + 1) 
-    
+    zimshape = (imshape[0], w1, imshape[2] - w3 + 1, imshape[3] - w4 + 1)
+
     # first iteration of ode.
     b = Tconv.conv2d(input=x, filters=W, filter_shape=Winit['shape'],
             border_mode="valid", image_shape=imshape)
@@ -376,7 +450,7 @@ def mfnw(config, activ, tied=True):
     Qinit = config['Q']
 
     x = T.matrix('x')
-    
+
     # D for dictionary
     _D = initweight(**Dinit)
     # normalize atoms of dictionary (== rows) to length 1
@@ -384,7 +458,7 @@ def mfnw(config, activ, tied=True):
     _D /= _d
     D = theano.shared(value=np.asarray(_D, dtype=theano.config.floatX),
             borrow=True, name='D')
-    
+
     # Q for ??
     _Q = initweight(**Qinit)
     # normalize atoms of dictionary (== rows) to length 1
@@ -412,7 +486,7 @@ def mfnw(config, activ, tied=True):
         params = [D, W, Q, L]
 
     _theta = np.random.randn(_D.shape[0],)
-    theta = theano.shared(value=np.asarray(_theta, dtype=theano.config.floatX), 
+    theta = theano.shared(value=np.asarray(_theta, dtype=theano.config.floatX),
             borrow=True, name="theta")
     params.append(theta)
 
@@ -442,7 +516,7 @@ def drsae(config, activ, tied=True):
     Qinit = config['Q']
 
     x = T.matrix('x')
-    
+
     # D for dictionary
     _D = initweight(**Dinit)
     # normalize atoms of dictionary (== rows) to length 1
@@ -450,7 +524,7 @@ def drsae(config, activ, tied=True):
     _D /= _d
     D = theano.shared(value=np.asarray(_D, dtype=theano.config.floatX),
             borrow=True, name='D')
-    
+
     # Q for ??
     _Q = initweight(**Qinit)
     # normalize atoms of dictionary (== rows) to length 1
@@ -478,7 +552,7 @@ def drsae(config, activ, tied=True):
         params = [D, W, Q, L]
 
     _theta = np.random.randn(_D.shape[0],)
-    theta = theano.shared(value=np.asarray(_theta, dtype=theano.config.floatX), 
+    theta = theano.shared(value=np.asarray(_theta, dtype=theano.config.floatX),
             borrow=True, name="theta")
     params.append(theta)
 
@@ -505,9 +579,9 @@ def lista(config, shrinkage):
     sp_lmbd = config['lambda']
     L = config['L']
     Dinit = config['D']
-    
+
     x = T.matrix('x')
-    
+
     # D for dictionary
     _D = initweight(**Dinit)
     # normalize atoms of dictionary (== rows) to length 1
@@ -519,16 +593,16 @@ def lista(config, shrinkage):
     _S = np.eye(_D.shape[0]) - 1./L * np.dot(_D ,_D.T)
     S = theano.shared(value=np.asarray(_S, dtype=theano.config.floatX),
             borrow=True, name='S')
-    
+
     _theta = np.abs(np.random.randn(_S.shape[0],))
     theta = theano.shared(value=np.asarray(_theta, dtype=theano.config.floatX),
             borrow=True, name="theta")
-    
+
     L = theano.shared(value=np.asarray(L, dtype=theano.config.floatX),
             borrow=True, name="L")
 
     params = (D, S, theta, L)
-    
+
     b = T.dot(x, D.T)
     z = shrinkage(b, theta)
     for i in range(layers):
@@ -542,7 +616,7 @@ def lista(config, shrinkage):
     cost = cost + sp_lmbd * sparsity
     return x, params, cost, rec, z
 
- 
+
 def lcod(config, shrinkage):
     """Learned CoD by Gregor/Lecun.
 
@@ -553,9 +627,9 @@ def lcod(config, shrinkage):
     sp_lmbd = config['lambda']
     L = config['L']
     Dinit = config['D']
-    
+
     x = T.matrix('x')
-    
+
     # D for dictionary
     _D = initweight(**Dinit)
     # normalize atoms of dictionary (== rows) to length 1
@@ -567,16 +641,16 @@ def lcod(config, shrinkage):
     _S = np.eye(_D.shape[0]) - 1./L * np.dot(_D ,_D.T)
     S = theano.shared(value=np.asarray(_S, dtype=theano.config.floatX),
             borrow=True, name='S')
-    
+
     _theta = np.abs(np.random.randn(_S.shape[0],))
     theta = theano.shared(value=np.asarray(_theta, dtype=theano.config.floatX),
             borrow=True, name="theta")
-    
+
     L = theano.shared(value=np.asarray(L, dtype=theano.config.floatX),
             borrow=True, name="L")
 
     params = (D, S, theta, L)
-    
+
     b = T.dot(x, D.T)
     z = 0
     for i in range(layers):
@@ -587,7 +661,7 @@ def lcod(config, shrinkage):
         e = e[T.arange(e.shape[0]), k]
         Sjk = S[:, k].T
         b = b + Sjk* e.dimshuffle(0, 'x')
-        z = znew 
+        z = znew
     z = shrinkage(b, theta)
 
     rec = T.dot(z, L * D)
@@ -607,9 +681,9 @@ def lcod(config, shrinkage):
 #    sp_lmbd = config['lambda']
 #    L = config['L']
 #    Dinit = config['D']
-#    
+#
 #    x = T.matrix('x')
-#    
+#
 #    # D for dictionary
 #    _D = initweight(**Dinit)
 #    # normalize atoms of dictionary (== rows) to length 1
@@ -621,11 +695,11 @@ def lcod(config, shrinkage):
 #    _S = np.eye(_D.shape[0]) - 1./L * np.dot(_D ,_D.T)
 #    S = theano.shared(value=np.asarray(_S, dtype=theano.config.floatX),
 #            borrow=True, name='S')
-#    
+#
 #    _theta = np.abs(np.random.randn(_S.shape[0],))
 #    theta = theano.shared(value=np.asarray(_theta, dtype=theano.config.floatX),
 #            borrow=True, name="theta")
-#    
+#
 #    L = theano.shared(value=np.asarray(L, dtype=theano.config.floatX),
 #            borrow=True, name="L")
 #
@@ -637,15 +711,15 @@ def lcod(config, shrinkage):
 #
 #    def subdot(idx, e , idx1, idx2, S):
 #        return T.dot(S[:, idx1[idx]:idx2[idx]], e[idx1[idx]:idx2[idx]].T).T
-#    
-#    def subtens(z,y,g,lower,upper): 
+#
+#    def subtens(z,y,g,lower,upper):
 #        return T.set_subtensor( z[lower[g]:upper[g]] , y[lower[g]:upper[g]])
 #    b = T.dot(x, D.T)
 #    z = 0
 #    for i in range(layers):
 #        y = None
 #        e = y - z
-#        
+#
 #        norms, _updt = theano.map(pnorms, sequences[lower, upper], non_sequences=[e])
 #        g = T.argmax(norms.T, axis=1)
 #
@@ -663,7 +737,7 @@ def lcod(config, shrinkage):
 
 
 def lconvista(config, shrinkage):
-    """Learned Convolutional ISTA   
+    """Learned Convolutional ISTA
 
     See github.com/msoelch/FastApproximations.
     """
@@ -673,18 +747,18 @@ def lconvista(config, shrinkage):
     btsz = config['btsz']
     lmbd = config['lambda']
 
-    Dinit = config['D'] 
+    Dinit = config['D']
     _D = initweight(**Dinit)
     _d = np.sqrt(np.sum(_D * _D, axis=1, keepdims=True))
     _D /= _d
     _D = _D.reshape(Dinit["tensor"])
-    D = theano.shared(value=np.asarray(_D, 
+    D = theano.shared(value=np.asarray(_D,
             dtype=theano.config.floatX),borrow=True,name='D')
     _theta = config['theta']
-    theta = theano.shared(value=np.asarray(_theta, 
+    theta = theano.shared(value=np.asarray(_theta,
             dtype=theano.config.floatX),borrow=True,name="theta")
     _L = config['L']
-    L = theano.shared(value=np.asarray(_L, 
+    L = theano.shared(value=np.asarray(_L,
             dtype=theano.config.floatX),borrow=True,name="L")
 
     params = [D, theta, L]
@@ -696,16 +770,16 @@ def lconvista(config, shrinkage):
     imshape = config['imshape']
     x = T.matrix('x')
     _x = x.reshape(imshape)
-    
+
     z = T.zeros(config['zshape'], dtype=theano.config.floatX)
 
     # The combination of for loop and 'hand calculated' gradient was tested
     # on CPU with 2 layers and 16 filters as well as 5 layers and 49 filters.
     # Note though that T.grad catches up with increasing parameters.
-    # Hand calculated grad is preferred due to higher flexibility. 
+    # Hand calculated grad is preferred due to higher flexibility.
     for i in range(layers):
-        deconv = Tconv.conv2d(z, D, border_mode='valid', 
-                image_shape=config['zshape'], filter_shape=fs1) 
+        deconv = Tconv.conv2d(z, D, border_mode='valid',
+                image_shape=config['zshape'], filter_shape=fs1)
         gradZ = Tconv.conv2d(deconv  - _x, D[:,:,::-1,::-1].dimshuffle(1,0,2,3),
                 border_mode='full', image_shape=config['imshape'],
                 filter_shape=fs2)
@@ -719,13 +793,13 @@ def lconvista(config, shrinkage):
         # rec_error = (X_i - rec_i) ** 2
 
         rec = Tconv.conv2d(_z, D, border_mode='valid', image_shape=config['zshape'],
-                filter_shape=_D.shape) 
+                filter_shape=_D.shape)
         error = 0.5*T.mean( ((x - rec)**2).sum(axis=-1).sum(axis=-1))
         return error, rec
 
 
     sparsity = T.mean(T.sum(T.sum(T.abs_(z),axis=-1),axis=-1))
-    rec_err, rec = rec_error(_x, z, D)    
+    rec_err, rec = rec_error(_x, z, D)
 
     cost = rec_err + lmbd*sparsity
     return x, params, z, rec, rec_err, cost, sparsity
@@ -893,7 +967,7 @@ def mlp(config, params, im):
 
     assert len(shapes) == len(activs),\
             "[MLP -- {0}]: One layer, One activation.".format(tag)
-    
+
     print "[MLP -- {0}]: MLP with {1} layers.".format(tag, len(shapes))
 
 
@@ -954,7 +1028,7 @@ def pmlp(config, params, im):
             "[PMLP -- {0}]: One layer, One activation, One noise.".format(tag)
 
     rng = T.shared_randomstreams.RandomStreams()
- 
+
     inpt = im[config['inpt']]
     if type(inpt) in [list, tuple]:
         if len(inpt) == 1:
@@ -966,7 +1040,7 @@ def pmlp(config, params, im):
     #should w1 and w2 be shared? -> make option
     _tmp_name = config['inpt']
     for i, (shape, act, noise) in enumerate(zip(shapes, activs, noises)):
-        
+
         if noise[0] == "01":
             inpt1 = rng.binomial(size=inpt.shape, n=1, p=1.0-noise[1], dtype=theano.config.floatX) * inpt
             inpt2 = rng.binomial(size=inpt.shape, n=1, p=1.0-noise[1], dtype=theano.config.floatX) * inpt
@@ -975,7 +1049,7 @@ def pmlp(config, params, im):
             inpt2 = rng.normal(size=inpt.shape, std=noise[1], dtype=theano.config.floatX) + inpt
         else:
             assert False, "[PMLP -- {0}: Unknown noise process.".format(tag)
-        
+
         _tmp = initweight(shape[:2], variant=config["init"])
         _tmp_name = "{0}_w1{1}".format(tag, i)
         _w = theano.shared(value=_tmp, borrow=True, name=_tmp_name)
@@ -1002,7 +1076,7 @@ def pmlp(config, params, im):
         _tmp_name = "{0}_b{1}".format(tag, i)
         _b = theano.shared(value=_tmp, borrow=True, name=_tmp_name)
         params.append(_b)
-        
+
         inpt = act(T.dot(prod, _w) + _b)
         _tmp_name = "{0}_layer{1}".format(tag, i)
         im[_tmp_name] = inpt
@@ -1027,7 +1101,7 @@ def conv(config, params, im):
     imshape = config['imshape']
 
     print "[CNN -- {0}]: CNN with {1} layers, input image {2}.".format(tag, len(shapes), imshape)
-    
+
     inpt = im[config['inpt']]
     if type(inpt) in [list, tuple]:
         if len(inpt) == 1:
@@ -1042,7 +1116,7 @@ def conv(config, params, im):
 
         init["imshape"] = imshape
         _tmp = initweight(shape, variant=init['type'], **init)
-        
+
         _tmp_name = "{0}_cnn_w{1}".format(tag, i)
         _w = theano.shared(value=_tmp, borrow=True, name=_tmp_name)
         params.append(_w)
@@ -1088,7 +1162,7 @@ def pconv(config, params, im):
     imshape = config['imshape']
 
     print "[CNN -- {0}]: CNN with {1} layers, input image {2}.".format(tag, len(shapes), imshape)
-    
+
     init = config["init"]
 
     inpt = im[config['inpt']]
@@ -1107,7 +1181,7 @@ def pconv(config, params, im):
         if init == "normal":
             print "[CNN -- {0}, L{1}]: Init shape {2} via Gaussian.".format(tag, i, shape)
             _tmp = {"std": 0.1}
-            _tmp = initweight(shape, variant=init, **_tmp) 
+            _tmp = initweight(shape, variant=init, **_tmp)
         else:
             print "[CNN -- {0}, L{1}]: Init shape {2} via Uniform.".format(tag, i, shape)
             fan_in = np.prod(shape[1:])
@@ -1152,7 +1226,7 @@ def deconv(config, params, im):
     scales = config['scales']
     borders = config['borders']
     inits = config["inits"]
-    
+
     assert len(shapes) == len(activs),\
             "[DCNN -- {0}]: One layer, One activation.".format(tag)
     assert len(shapes) == len(scales),\
@@ -1163,7 +1237,7 @@ def deconv(config, params, im):
     imshape = config['imshape']
 
     print "[DCNN -- {0}]: DeconvCNN with {1} layers, input image {2}.".format(tag, len(shapes), imshape)
-    
+
     init = config["inits"]
 
     inpt = im[config['inpt']]
@@ -1205,7 +1279,7 @@ def deconv(config, params, im):
         elif border == "valid":
             imshape = (imshape[0], shape[0], imshape[2]-shape[2]+1, imshape[3]-shape[3]+1)
         print "----", imshape
-        
+
         _tmp_name = "{0}_conv_layer{1}".format(tag, i)
         im[_tmp_name] = _conv
 
@@ -1230,7 +1304,7 @@ def sequential(config, params, im):
     for comp in components:
         assert "type" in comp, "[SEQ -- {0}] Subcomponent needs 'type'.".format(tag)
         typ = comp['type']
- 
+
         _tag = comp['tag']
         comp['tag'] = "|".join([tag, _tag])
 
@@ -1259,15 +1333,15 @@ def parallel(config, params, im):
     for comp in components:
         assert "type" in comp, "[PAR -- {0}] Subcomponent needs 'type'.".format(tag)
         typ = comp['type']
-        
+
         _tag = comp['tag']
         comp['tag'] = "|".join([tag, _tag])
 
         comp['inpt'] = inpt
         typ(config=comp, params=params, im=im)
-        
+
         assert "otpt" in comp, "[PAR -- {0}] Subcomponent needs 'otpt'.".format(tag)
-    
+
     config['otpt'] = inpt
 
 
@@ -1297,7 +1371,7 @@ def dblin(config, params, im):
     if 'dactiv' in config:
         print "[DBLIN -- {0}]: Preactivation for d: {1}".format(tag, config['dactiv'])
         activ = config['dactiv']
-        d = activ(d) 
+        d = activ(d)
 
     # 'theta' == shape of theta matrix
     theta = config['theta']
@@ -1308,7 +1382,7 @@ def dblin(config, params, im):
     if 'theta' in normalize:
         print "[DBLIN -- {0}]: Normalize theta along axis={1}.".format(tag, normalize['theta'])
         im['normalize'][_tmp_name] = normalize['theta']
- 
+
     c_theta = config['tactiv'](T.dot(c, theta))
     print "[DBLIN -- {0}]: Activation for c_theta: {1}".format(tag, config['tactiv'])
     im['dblin_c_theta'] = c_theta
@@ -1323,7 +1397,7 @@ def dblin(config, params, im):
     if 'psi' in normalize:
         print "[DBLIN -- {0}]: Normalize psi along axis={1}.".format(tag, normalize['psi'])
         im['normalize'][_tmp_name] = normalize['psi']
- 
+
     d_psi = config['pactiv'](T.dot(d, psi))
     print "[DBLIN -- {0}]: Activation for d_psi: {1}".format(tag, config['pactiv'])
     im['dblin_d_psi'] = d_psi
@@ -1352,7 +1426,7 @@ def dblin(config, params, im):
     if 'phi' in normalize:
         print "[DBLIN -- {0}]: Normalize phi along axis={1}.".format(tag, normalize['phi'])
         im['normalize'][_tmp_name] = normalize['phi']
- 
+
     config['otpt'] = 'dblin_x'
 
 
@@ -1418,7 +1492,7 @@ def kl_lrg_g(config, params, im):
 
     dim = inpt.shape[1] / 3
     mu = inpt[:, :dim]
-    
+
     # Note: for convenience, this is the inverse of the log_var
     # See eq. 16, the inverse is always used in the computations.
     log_var_inv = inpt[:, dim:2*dim]
@@ -1437,7 +1511,7 @@ def kl_lrg_g(config, params, im):
 
     _tmp = "{0}_kl_lrg_g_u".format(tag)
     im[_tmp] = u
- 
+
     mu_sq = mu * mu
     var_inv = T.exp(log_var_inv)
     #log_var_inv = T.log(var_inv+1e-8)
@@ -1516,7 +1590,7 @@ def kl_dlap_lap(config, params, im):
     z = mu - b*T.sgn(uni)*T.log(1 - 2*T.abs_(uni) + 1e-6)
     _tmp = "{0}_kl_dlap_lap_z".format(tag)
     im[_tmp] = z
-    config['otpt'] = _tmp 
+    config['otpt'] = _tmp
 
     # difference to paper: gradient _descent_, minimize an upper bound
     # -> needs a negative sign
@@ -1596,15 +1670,15 @@ def bern_xe(config, params, im):
         if len(inpt) == 1:
             print "[BERNXE]: Input is a 1-list, taking first element."
             inpt = inpt[0]
-    
+
     t = im[config['trgt']]
     if type(t) in [list, tuple]:
         if len(t) == 1:
             print "[BERNXE]: Target is a 1-list, taking first element."
             t = t[0]
-    
+
     pred = T.nnet.sigmoid(inpt)
-    im['predict'] = pred 
+    im['predict'] = pred
     # difference to paper: gradient _descent_, minimize upper bound
     # -> needs a negative sign
     #cost= -T.nnet.binary_crossentropy(pred, t)
@@ -1628,7 +1702,7 @@ def g_nll(config, params, im):
         if len(inpt) == 1:
             print "[G_NLL]: Input is a 1-list, taking first element."
             inpt = inpt[0]
-    
+
     t = im[config['trgt']]
     if type(t) in [list, tuple]:
         if len(t) == 1:
@@ -1641,7 +1715,7 @@ def g_nll(config, params, im):
     else:
         sigma = 1
     pred = scale*inpt
-    im['predict'] = pred 
+    im['predict'] = pred
     # difference to paper: gradient _descent_, minimize upper bound
     # -> needs a negative sign
     cost = ((pred - t)/sigma 	)**2
@@ -1669,7 +1743,7 @@ def dg_nll(config, params, im):
         if len(inpt) == 1:
             print "[G_NLL]: Input is a 1-list, taking first element."
             inpt = inpt[0]
-    
+
     t = im[config['trgt']]
     if type(t) in [list, tuple]:
         if len(t) == 1:
@@ -1682,8 +1756,8 @@ def dg_nll(config, params, im):
     im['log_var'] = log_var
     # difference to paper: gradient _descent_, minimize upper bound
     # -> needs a negative sign
-    cost = ((pred - t)**2)/var 
-    cost = 0.5*T.sum(cost, axis=1) + dim/2.*T.log(2*np.pi) + T.sum(log_var, axis=1) 
+    cost = ((pred - t)**2)/var
+    cost = 0.5*T.sum(cost, axis=1) + dim/2.*T.log(2*np.pi) + T.sum(log_var, axis=1)
     cost = T.mean(cost)
     im['dg_nll'] = cost
     im['cost'] = im['cost'] + cost
@@ -1694,7 +1768,7 @@ def dg_nll(config, params, im):
 # params = [ims['_kl_dg_g_mu'], ims['_kl_dg_g_log_var']]
 # res = estimate_ll(data[:1000], 500, ims['inpt'][0], ims['_kl_dg_g_z'], ims['neg_log_like_per_sampel'], params, ll_diag_gauss_logvar, [0, 0])
 # Note: pz is ll_diag_gauss_logvar, using log variance -> params are 0 and _0_!
-def estimate_ll(data, no_mcs, inpts, z_samples, ncll_x_z, params, 
+def estimate_ll(data, no_mcs, inpts, z_samples, ncll_x_z, params,
         pz, prior):
     """Estimate loglikelihood of samples in _data_, using _no_mcs_
     many importance samples from proposal distribution _pz_. _pz_
@@ -1703,7 +1777,7 @@ def estimate_ll(data, no_mcs, inpts, z_samples, ncll_x_z, params,
     are in _prior_ (e.g. simply [0, 1] for a standard normal).
     _inpts_ is a theano expression for the input of the VAE,
     _z_samples_ is a theano expression for generating samples from
-    the proposal distribution given _inpts_ (_z_samples_ and _pz_ 
+    the proposal distribution given _inpts_ (_z_samples_ and _pz_
     must be matching), _ncll_x_z_ is a theano expression of the
     negative loglikelihood of x given z (z representing the latents
     of the graphical model).
@@ -1725,7 +1799,7 @@ def estimate_ll(data, no_mcs, inpts, z_samples, ncll_x_z, params,
 
 
 # estimating loglikelihood per row of samples x from diagonal gauss, with
-# parameters mu (mean) and logvar (variance in log). 
+# parameters mu (mean) and logvar (variance in log).
 # Needs to sum of axis=1 to get the estimate for one sample (a row) in x.
 def ll_diag_gauss_logvar(x, mu, logvar):
     const = -np.log(2*np.pi)/2
@@ -1761,12 +1835,12 @@ def vae(config, special=None, tied=None):
     intermediates['cost'] = 0
 
     enc = encoder['type']
-    # encoder needs a field for input -- name of 
+    # encoder needs a field for input -- name of
     # intermediate symbolic expr.
     encoder['inpt'] = 'inpt'
     enc(config=encoder, params=params, im=intermediates)
     assert "otpt" in encoder, "Encoder needs an output."
-    
+
     kl = kl_cost['type']
     kl_cost['inpt'] = encoder['otpt']
     kl(config=kl_cost, params=params, im=intermediates)
@@ -1808,12 +1882,12 @@ def semi_vae(config, special=None, tied=None):
     intermediates['cost'] = 0
 
     enc = encoder['type']
-    # encoder needs a field for input -- name of 
+    # encoder needs a field for input -- name of
     # intermediate symbolic expr.
     encoder['inpt'] = 'inpt'
     enc(config=encoder, params=params, im=intermediates)
     assert "otpt" in encoder, "Encoder needs an output."
-    
+
     kl = kl_cost['type']
     kl_cost['inpt'] = encoder['otpt']
     kl(config=kl_cost, params=params, im=intermediates)
@@ -1862,7 +1936,7 @@ def adadelta(params, grads, settings, **kwargs):
     for param_i, grad_i, arms_grad_i, arms_upds_i in zip(params, grads, arms_grads, arms_upds):
         delta_i = T.sqrt(arms_upds_i + eps)/T.sqrt(updates[arms_grad_i] + eps) * lr * grad_i
         updates[arms_upds_i] = decay*arms_upds_i + (1-decay)*delta_i*delta_i
-        
+
         if param_i.name in kwargs:
             up = param_i - delta_i
             wl = T.sqrt(T.sum(T.square(up), axis=kwargs[param_i.name]) + eps)
@@ -1879,7 +1953,7 @@ def adadelta(params, grads, settings, **kwargs):
 def adam(params, grads, settings, **kwargs):
     """
     AdaM by Kingma and Ba.
-    
+
     According to the paper good settings for the parameters are
     - alpha = 2e-4
     - beta1 = 0.1
@@ -1902,7 +1976,7 @@ def adam(params, grads, settings, **kwargs):
         lmbd = settings["lambda"]
     else:
         lmbd = 1e-8
-    
+
     print "[AdaM] alpha: {0}; beta1: {1}, beta2: {2}, lambda: {3}".format(alpha, b1, b2, lmbd)
 
     ms = []
@@ -1927,7 +2001,7 @@ def adam(params, grads, settings, **kwargs):
     for param_i, grad_i, _m, _v in zip(params, grads, ms, vs):
         _m_ = _m/(1-(1-b1)**updates[t])
         _v_ = _v/(1-(1-b2)**updates[t])
-        delta_i = alpha * _m_/(T.sqrt(_v_) + eps) 
+        delta_i = alpha * _m_/(T.sqrt(_v_) + eps)
         updates[param_i] = param_i - delta_i
     return updates
 
@@ -1963,7 +2037,7 @@ def rmsprop(params, grads, settings, **kwargs):
     for param_i, grad_i, arms_grad_i, mom_i in zip(params, grads, arms_grads, _momentums):
         delta_i = lr*grad_i/T.sqrt(updates[arms_grad_i] + eps)
         updates[mom_i] = mom*mom_i + delta_i
-        
+
         if param_i.name in kwargs:
             up = param_i - delta_i
             wl = T.sqrt(T.sum(T.square(up), axis=kwargs[param_i.name]) + 1e-8)
@@ -2049,7 +2123,7 @@ def test_vae(enc_out=2, epochs=100, lr=1,
             cost += btsz*train(data[mbi*btsz:(mbi+1)*btsz])
         print epoch, cost/sz
 
-        
+
 def perforate(x, scale=2):
     """
     Upsample a 4d tensor in the last two dimensions
